@@ -17,6 +17,7 @@ export const dataTables = [
   'ordem_servicos_itens',
   'orcamentos',
   'fotos_os',
+  'configuracao_empresa',
   'app_usuarios'
 ] as const;
 
@@ -30,7 +31,7 @@ export type CompanyConfig = {
   whatsapp?: string | null;
   email?: string | null;
   site?: string | null;
-  redes_sociais?: Record<string, string> | null;
+  redes_sociais?: string | null;
 };
 
 export type PdfSection = {
@@ -132,15 +133,28 @@ export async function fetchTable(supabaseAdmin: SupabaseClient, tableName: strin
   const { data, error } = await supabaseAdmin.from(tableName).select('*');
 
   if (error) {
-    if (['marcas_veiculos', 'modelos_veiculos', 'ordem_servicos_itens'].includes(tableName)) return [];
+    if (['marcas_veiculos', 'modelos_veiculos', 'ordem_servicos_itens', 'configuracao_empresa'].includes(tableName)) return [];
     throw new Error(`Erro ao exportar ${tableName}: ${error.message}`);
   }
 
   return (data || []) as Row[];
 }
 
-export async function fetchCompanyConfig(_supabaseAdmin: SupabaseClient): Promise<CompanyConfig> {
-  return { nome_empresa: 'Garage Auto Service' };
+export async function fetchCompanyConfig(supabaseAdmin: SupabaseClient): Promise<CompanyConfig> {
+  const fallback = { nome_empresa: 'Garage Auto Service' };
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('configuracao_empresa')
+      .select('nome_empresa, cnpj, endereco, telefone, whatsapp, email, site, redes_sociais')
+      .eq('id', 1)
+      .maybeSingle();
+
+    if (error || !data) return fallback;
+    return data;
+  } catch {
+    return fallback;
+  }
 }
 
 export async function createStandardPdf(options: {
@@ -182,7 +196,7 @@ export async function createStandardPdf(options: {
 
 async function drawHeader(doc: any, company: CompanyConfig, title: string, number: string) {
   const logo = fetchProjectLogo();
-  doc.roundedRect(38, 34, 519, 96, 6).fill('#f7f7f7').stroke('#d8d8d8');
+  doc.roundedRect(38, 34, 519, 118, 6).fill('#f7f7f7').stroke('#d8d8d8');
 
   if (logo) {
     try {
@@ -194,22 +208,23 @@ async function drawHeader(doc: any, company: CompanyConfig, title: string, numbe
     drawLogoFallback(doc, company);
   }
 
-  doc.fillColor('#111').fontSize(16).text(company.nome_empresa || 'Garage Auto Service', 134, 48, { width: 250 });
+  doc.fillColor('#111').fontSize(16).text(company.nome_empresa || 'Garage Auto Service', 134, 48, { width: 246 });
   doc.fillColor('#444').fontSize(8);
   [
     company.cnpj ? `CNPJ: ${company.cnpj}` : '',
     company.endereco || '',
     [company.telefone, company.whatsapp ? `WhatsApp: ${company.whatsapp}` : ''].filter(Boolean).join(' | '),
-    [company.email, company.site].filter(Boolean).join(' | ')
+    [company.email, company.site].filter(Boolean).join(' | '),
+    company.redes_sociais || ''
   ]
     .filter(Boolean)
-    .forEach((line) => doc.text(line, { width: 260 }));
+    .forEach((line) => doc.text(line, 134, doc.y + 1, { width: 246 }));
 
   doc.fillColor('#111').fontSize(15).text(title, 405, 50, { width: 130, align: 'right' });
   doc.fontSize(10).text(`No ${number}`, { width: 130, align: 'right' });
   doc.fontSize(8).fillColor('#555').text(`Emissão: ${new Date().toLocaleDateString('pt-BR')}`, { width: 130, align: 'right' });
   doc.moveDown(4);
-  doc.y = 148;
+  doc.y = 170;
 }
 
 function drawLogoFallback(doc: any, company: CompanyConfig) {

@@ -49,6 +49,17 @@ type AppUser = {
   mecanicos?: { nome: string } | null;
 };
 
+type ConfiguracaoEmpresa = {
+  nome_empresa?: string | null;
+  cnpj?: string | null;
+  endereco?: string | null;
+  telefone?: string | null;
+  whatsapp?: string | null;
+  email?: string | null;
+  site?: string | null;
+  redes_sociais?: string | null;
+};
+
 type Cliente = {
   id: string;
   nome: string;
@@ -242,6 +253,7 @@ export default function Home() {
   const [pecas, setPecas] = useState<Peca[]>([]);
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
   const [fotos, setFotos] = useState<FotoOS[]>([]);
+  const [configuracaoEmpresa, setConfiguracaoEmpresa] = useState<ConfiguracaoEmpresa>({});
   const [clienteSelecionado, setClienteSelecionado] = useState('');
   const [marcaVeiculoSelecionada, setMarcaVeiculoSelecionada] = useState('');
   const [modeloVeiculoSelecionado, setModeloVeiculoSelecionado] = useState('');
@@ -283,7 +295,8 @@ export default function Home() {
         { key: 'fotos', url: '/api/fotos' },
         ...(currentIsAdmin
           ? [
-              { key: 'usuarios', url: '/api/usuarios' }
+              { key: 'usuarios', url: '/api/usuarios' },
+              { key: 'configuracaoEmpresa', url: '/api/configuracao-empresa' }
             ]
           : [])
       ];
@@ -326,6 +339,7 @@ export default function Home() {
       setOrcamentos(getData('orcamentos') as Orcamento[]);
       setFotos(getData('fotos') as FotoOS[]);
       setUsuarios(getData('usuarios') as AppUser[]);
+      setConfiguracaoEmpresa((getData('configuracaoEmpresa') as ConfiguracaoEmpresa) || {});
 
       const falhasOpcionais = resultados.filter((resultado) => !resultado.required && resultado.error);
 
@@ -816,6 +830,36 @@ export default function Home() {
       await carregar();
     } catch (error) {
       setErro(error instanceof Error ? error.message : 'Erro inesperado ao salvar usuário.');
+    } finally {
+      setSalvando('');
+    }
+  }
+
+  async function enviarConfiguracaoEmpresa(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+
+    setMsg('');
+    setErro('');
+    setSalvando('Dados da empresa');
+
+    try {
+      const res = await fetch('/api/configuracao-empresa', {
+        method: 'PUT',
+        headers: adminHeaders(),
+        body: JSON.stringify(Object.fromEntries(formData.entries()))
+      });
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json.error || 'Erro ao salvar dados da empresa.');
+      }
+
+      setConfiguracaoEmpresa(json);
+      setMsg('Dados da empresa salvos. Os próximos PDFs usarão esse cabeçalho.');
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Erro inesperado ao salvar dados da empresa.');
     } finally {
       setSalvando('');
     }
@@ -1428,6 +1472,30 @@ export default function Home() {
           <div className="sectionTitle">
             <Settings size={18} />
             <h2>Administração</h2>
+          </div>
+
+          <div className="panel">
+            <div className="panelHeader">
+              <h2>Dados da empresa no PDF</h2>
+              <FileText size={18} />
+            </div>
+            <form onSubmit={enviarConfiguracaoEmpresa} key={JSON.stringify(configuracaoEmpresa)}>
+              <div className="row">
+                <input name="nome_empresa" placeholder="Nome da empresa" defaultValue={configuracaoEmpresa.nome_empresa || ''} />
+                <input name="cnpj" placeholder="CNPJ" defaultValue={configuracaoEmpresa.cnpj || ''} />
+              </div>
+              <input name="endereco" placeholder="Endereço" defaultValue={configuracaoEmpresa.endereco || ''} />
+              <div className="row">
+                <input name="telefone" placeholder="Telefone" defaultValue={configuracaoEmpresa.telefone || ''} />
+                <input name="whatsapp" placeholder="WhatsApp" defaultValue={configuracaoEmpresa.whatsapp || ''} />
+              </div>
+              <div className="row">
+                <input name="email" placeholder="E-mail" type="email" defaultValue={configuracaoEmpresa.email || ''} />
+                <input name="site" placeholder="Site" defaultValue={configuracaoEmpresa.site || ''} />
+              </div>
+              <input name="redes_sociais" placeholder="Redes sociais" defaultValue={configuracaoEmpresa.redes_sociais || ''} />
+              <SubmitButton loading={salvando === 'Dados da empresa'} label="Salvar dados da empresa" />
+            </form>
           </div>
 
           <div className="panel">

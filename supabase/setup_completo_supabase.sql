@@ -117,6 +117,19 @@ create table if not exists fotos_os (
   created_at timestamptz not null default now()
 );
 
+create table if not exists configuracao_empresa (
+  id int primary key default 1 check (id = 1),
+  nome_empresa text,
+  cnpj text,
+  endereco text,
+  telefone text,
+  whatsapp text,
+  email text,
+  site text,
+  redes_sociais text,
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists app_usuarios (
   id uuid primary key default uuid_generate_v4(),
   nome text not null,
