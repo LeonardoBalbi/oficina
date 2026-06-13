@@ -183,6 +183,39 @@ const money = new Intl.NumberFormat('pt-BR', {
   currency: 'BRL'
 });
 
+const catalogoServicosBase: Pick<Servico, 'nome' | 'descricao' | 'valor'>[] = [
+  { nome: 'Troca de óleo', descricao: 'Troca de óleo do motor e verificação do filtro.', valor: 180 },
+  { nome: 'Troca de filtro de óleo', descricao: 'Substituição do filtro de óleo.', valor: 60 },
+  { nome: 'Troca de filtro de ar', descricao: 'Substituição do filtro de ar do motor.', valor: 50 },
+  { nome: 'Troca de filtro de combustível', descricao: 'Substituição do filtro de combustível.', valor: 80 },
+  { nome: 'Troca de filtro de cabine', descricao: 'Substituição do filtro do ar-condicionado/cabine.', valor: 60 },
+  { nome: 'Alinhamento', descricao: 'Alinhamento de direção.', valor: 90 },
+  { nome: 'Balanceamento', descricao: 'Balanceamento das rodas.', valor: 80 },
+  { nome: 'Cambagem', descricao: 'Ajuste de cambagem conforme necessidade do veículo.', valor: 120 },
+  { nome: 'Rodízio de pneus', descricao: 'Rodízio dos pneus e conferência de calibragem.', valor: 60 },
+  { nome: 'Diagnóstico eletrônico', descricao: 'Scanner automotivo e leitura de falhas.', valor: 120 },
+  { nome: 'Revisão preventiva', descricao: 'Checklist geral de manutenção preventiva.', valor: 250 },
+  { nome: 'Revisão de freios', descricao: 'Inspeção do sistema de freios.', valor: 120 },
+  { nome: 'Troca de pastilha de freio', descricao: 'Substituição das pastilhas de freio.', valor: 160 },
+  { nome: 'Troca de disco de freio', descricao: 'Substituição dos discos de freio.', valor: 220 },
+  { nome: 'Sangria de freio', descricao: 'Sangria e troca do fluido de freio.', valor: 120 },
+  { nome: 'Troca de amortecedor', descricao: 'Substituição de amortecedor.', valor: 280 },
+  { nome: 'Troca de bateria', descricao: 'Substituição e teste do sistema de carga.', valor: 80 },
+  { nome: 'Troca de correia dentada', descricao: 'Substituição da correia dentada.', valor: 450 },
+  { nome: 'Troca de correia poly-v', descricao: 'Substituição da correia de acessórios.', valor: 180 },
+  { nome: 'Troca de embreagem', descricao: 'Substituição do kit de embreagem.', valor: 900 },
+  { nome: 'Limpeza de bicos', descricao: 'Limpeza dos bicos injetores.', valor: 180 },
+  { nome: 'Limpeza de TBI', descricao: 'Limpeza do corpo de borboleta/TBI.', valor: 140 },
+  { nome: 'Higienização de ar-condicionado', descricao: 'Higienização do sistema de ar-condicionado.', valor: 120 },
+  { nome: 'Carga de gás do ar-condicionado', descricao: 'Recarga de gás do ar-condicionado.', valor: 220 },
+  { nome: 'Troca de velas', descricao: 'Substituição das velas de ignição.', valor: 140 },
+  { nome: 'Troca de cabo de vela', descricao: 'Substituição dos cabos de vela.', valor: 120 },
+  { nome: 'Troca de fluido de câmbio', descricao: 'Substituição do fluido do câmbio.', valor: 280 },
+  { nome: 'Troca de fluido de arrefecimento', descricao: 'Substituição do fluido do sistema de arrefecimento.', valor: 180 },
+  { nome: 'Troca de lâmpada', descricao: 'Substituição de lâmpadas externas ou internas.', valor: 40 },
+  { nome: 'Serviço de elétrica', descricao: 'Diagnóstico e reparo elétrico.', valor: 160 }
+];
+
 export default function Home() {
   const [usuarioLogado, setUsuarioLogado] = useState<AppUser | null>(null);
   const [usuarios, setUsuarios] = useState<AppUser[]>([]);
@@ -199,6 +232,9 @@ export default function Home() {
   const [clienteSelecionado, setClienteSelecionado] = useState('');
   const [marcaVeiculoSelecionada, setMarcaVeiculoSelecionada] = useState('');
   const [modeloVeiculoSelecionado, setModeloVeiculoSelecionado] = useState('');
+  const [servicoSelecionado, setServicoSelecionado] = useState('');
+  const [servicoValor, setServicoValor] = useState('');
+  const [servicoDescricao, setServicoDescricao] = useState('');
   const [buscaOrdens, setBuscaOrdens] = useState('');
   const [msg, setMsg] = useState('');
   const [erro, setErro] = useState('');
@@ -313,6 +349,25 @@ export default function Home() {
     if (!marcaVeiculoSelecionada || marcaVeiculoSelecionada === '__nova__') return [];
     return marcasVeiculos.find((marca) => marca.id === marcaVeiculoSelecionada)?.modelos || [];
   }, [marcaVeiculoSelecionada, marcasVeiculos]);
+
+  const servicosCatalogo = useMemo(() => {
+    const mapa = new Map<string, Pick<Servico, 'nome' | 'descricao' | 'valor'>>();
+
+    [...catalogoServicosBase, ...servicos].forEach((servico) => {
+      const nome = String(servico.nome || '').trim();
+      if (!nome) return;
+      const chave = normalizeSearch(nome);
+      if (!mapa.has(chave)) {
+        mapa.set(chave, {
+          nome,
+          descricao: servico.descricao || '',
+          valor: Number(servico.valor || 0)
+        });
+      }
+    });
+
+    return Array.from(mapa.values()).sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [servicos]);
 
   const osAbertas = useMemo(
     () => ordens.filter((ordem) => ordem.status === 'aberta' || ordem.status === 'andamento'),
@@ -430,6 +485,51 @@ export default function Home() {
       await carregar();
     } catch (error) {
       setErro(error instanceof Error ? error.message : 'Erro inesperado ao salvar veículo.');
+    } finally {
+      setSalvando('');
+    }
+  }
+
+  async function enviarServico(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const nomeCatalogo = String(formData.get('nome_catalogo') || '');
+    const novoNome = String(formData.get('novo_servico') || '').trim();
+    const nome = nomeCatalogo === '__novo__' ? novoNome : nomeCatalogo;
+
+    setMsg('');
+    setErro('');
+    setSalvando('Serviço');
+
+    try {
+      if (!nome) {
+        throw new Error('Selecione ou informe o nome do serviço.');
+      }
+
+      const res = await fetch('/api/servicos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nome,
+          valor: formData.get('valor'),
+          descricao: formData.get('descricao')
+        })
+      });
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json.error || 'Erro ao salvar serviço.');
+      }
+
+      form.reset();
+      setServicoSelecionado('');
+      setServicoValor('');
+      setServicoDescricao('');
+      setMsg('Serviço salvo com sucesso.');
+      await carregar();
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Erro inesperado ao salvar serviço.');
     } finally {
       setSalvando('');
     }
@@ -870,10 +970,46 @@ export default function Home() {
             <h2>Novo serviço</h2>
             <Wrench size={18} />
           </div>
-          <form onSubmit={(e) => enviar(e, '/api/servicos', 'Serviço')}>
-            <input name="nome" placeholder="Ex: Troca de óleo" required />
-            <input name="valor" placeholder="Valor" type="number" min="0" step="0.01" required />
-            <textarea name="descricao" placeholder="Descrição" />
+          <form onSubmit={enviarServico}>
+            <select
+              name="nome_catalogo"
+              value={servicoSelecionado}
+              onChange={(event) => {
+                const value = event.target.value;
+                const servico = servicosCatalogo.find((item) => item.nome === value);
+                setServicoSelecionado(value);
+                setServicoValor(servico && value !== '__novo__' ? String(servico.valor || '') : '');
+                setServicoDescricao(servico && value !== '__novo__' ? String(servico.descricao || '') : '');
+              }}
+              required
+            >
+              <option value="">Serviço</option>
+              {servicosCatalogo.map((servico) => (
+                <option key={servico.nome} value={servico.nome}>
+                  {servico.nome}
+                </option>
+              ))}
+              <option value="__novo__">Adicionar novo serviço</option>
+            </select>
+            {servicoSelecionado === '__novo__' && (
+              <input name="novo_servico" placeholder="Nome do novo serviço" required />
+            )}
+            <input
+              name="valor"
+              placeholder="Valor"
+              type="number"
+              min="0"
+              step="0.01"
+              value={servicoValor}
+              onChange={(event) => setServicoValor(event.target.value)}
+              required
+            />
+            <textarea
+              name="descricao"
+              placeholder="Descrição"
+              value={servicoDescricao}
+              onChange={(event) => setServicoDescricao(event.target.value)}
+            />
             <SubmitButton loading={salvando === 'Serviço'} label="Cadastrar serviço" />
           </form>
         </div>}
