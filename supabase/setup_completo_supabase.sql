@@ -21,6 +21,20 @@ create table if not exists veiculos (
   created_at timestamptz not null default now()
 );
 
+create table if not exists marcas_veiculos (
+  id uuid primary key default uuid_generate_v4(),
+  nome text not null unique,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists modelos_veiculos (
+  id uuid primary key default uuid_generate_v4(),
+  marca_id uuid not null references marcas_veiculos(id) on delete cascade,
+  nome text not null,
+  created_at timestamptz not null default now(),
+  unique (marca_id, nome)
+);
+
 create table if not exists servicos (
   id uuid primary key default uuid_generate_v4(),
   nome text not null,
@@ -120,6 +134,7 @@ alter table ordens_servico
   add column if not exists mecanico_id uuid references mecanicos(id) on delete set null;
 
 create index if not exists idx_veiculos_cliente on veiculos(cliente_id);
+create index if not exists idx_modelos_veiculos_marca on modelos_veiculos(marca_id);
 create index if not exists idx_ordens_cliente on ordens_servico(cliente_id);
 create index if not exists idx_ordens_veiculo on ordens_servico(veiculo_id);
 create index if not exists idx_ordens_mecanico on ordens_servico(mecanico_id);
@@ -152,6 +167,19 @@ on conflict (usuario) do nothing;
 insert into storage.buckets (id, name, public)
 values ('fotos-os', 'fotos-os', true)
 on conflict (id) do update set public = true;
+
+insert into marcas_veiculos (nome)
+select distinct trim(marca)
+from veiculos
+where nullif(trim(marca), '') is not null
+on conflict (nome) do nothing;
+
+insert into modelos_veiculos (marca_id, nome)
+select distinct mv.id, trim(v.modelo)
+from veiculos v
+join marcas_veiculos mv on mv.nome = trim(v.marca)
+where nullif(trim(v.modelo), '') is not null
+on conflict (marca_id, nome) do nothing;
 
 insert into servicos (nome, descricao, valor) values
 ('Troca de óleo', 'Troca de óleo do motor', 180.00),

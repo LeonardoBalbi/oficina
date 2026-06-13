@@ -6,6 +6,8 @@ const PDFDocument = require('pdfkit');
 
 export const dataTables = [
   'clientes',
+  'marcas_veiculos',
+  'modelos_veiculos',
   'veiculos',
   'servicos',
   'mecanicos',
@@ -129,6 +131,7 @@ export async function fetchTable(supabaseAdmin: SupabaseClient, tableName: strin
   const { data, error } = await supabaseAdmin.from(tableName).select('*');
 
   if (error) {
+    if (['marcas_veiculos', 'modelos_veiculos'].includes(tableName)) return [];
     throw new Error(`Erro ao exportar ${tableName}: ${error.message}`);
   }
 

@@ -21,6 +21,20 @@ create table if not exists public.fornecedores (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.marcas_veiculos (
+  id uuid primary key default uuid_generate_v4(),
+  nome text not null unique,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.modelos_veiculos (
+  id uuid primary key default uuid_generate_v4(),
+  marca_id uuid not null references public.marcas_veiculos(id) on delete cascade,
+  nome text not null,
+  created_at timestamptz not null default now(),
+  unique (marca_id, nome)
+);
+
 create table if not exists public.pecas (
   id uuid primary key default uuid_generate_v4(),
   fornecedor_id uuid references public.fornecedores(id) on delete set null,
@@ -103,7 +117,21 @@ insert into storage.buckets (id, name, public)
 values ('fotos-os', 'fotos-os', true)
 on conflict (id) do update set public = true;
 
+insert into public.marcas_veiculos (nome)
+select distinct trim(marca)
+from public.veiculos
+where nullif(trim(marca), '') is not null
+on conflict (nome) do nothing;
+
+insert into public.modelos_veiculos (marca_id, nome)
+select distinct mv.id, trim(v.modelo)
+from public.veiculos v
+join public.marcas_veiculos mv on mv.nome = trim(v.marca)
+where nullif(trim(v.modelo), '') is not null
+on conflict (marca_id, nome) do nothing;
+
 create index if not exists idx_ordens_mecanico on public.ordens_servico(mecanico_id);
+create index if not exists idx_modelos_veiculos_marca on public.modelos_veiculos(marca_id);
 create index if not exists idx_pecas_fornecedor on public.pecas(fornecedor_id);
 create index if not exists idx_orcamentos_cliente on public.orcamentos(cliente_id);
 create index if not exists idx_fotos_os_ordem on public.fotos_os(ordem_id);

@@ -66,6 +66,18 @@ type Veiculo = {
   clientes?: { nome: string };
 };
 
+type MarcaVeiculo = {
+  id: string;
+  nome: string;
+  modelos: ModeloVeiculo[];
+};
+
+type ModeloVeiculo = {
+  id: string;
+  marca_id: string;
+  nome: string;
+};
+
 type Ordem = {
   id: string;
   cliente_id: string;
@@ -176,6 +188,7 @@ export default function Home() {
   const [usuarios, setUsuarios] = useState<AppUser[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [veiculos, setVeiculos] = useState<Veiculo[]>([]);
+  const [marcasVeiculos, setMarcasVeiculos] = useState<MarcaVeiculo[]>([]);
   const [ordens, setOrdens] = useState<Ordem[]>([]);
   const [servicos, setServicos] = useState<Servico[]>([]);
   const [mecanicos, setMecanicos] = useState<Mecanico[]>([]);
@@ -184,6 +197,8 @@ export default function Home() {
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
   const [fotos, setFotos] = useState<FotoOS[]>([]);
   const [clienteSelecionado, setClienteSelecionado] = useState('');
+  const [marcaVeiculoSelecionada, setMarcaVeiculoSelecionada] = useState('');
+  const [modeloVeiculoSelecionado, setModeloVeiculoSelecionado] = useState('');
   const [buscaOrdens, setBuscaOrdens] = useState('');
   const [msg, setMsg] = useState('');
   const [erro, setErro] = useState('');
@@ -203,6 +218,7 @@ export default function Home() {
       const endpoints = [
         { key: 'clientes', url: '/api/clientes', required: true },
         { key: 'veiculos', url: '/api/veiculos', required: true },
+        { key: 'catalogoVeiculos', url: '/api/catalogo-veiculos', required: true },
         { key: 'ordens', url: '/api/ordens', required: true },
         { key: 'servicos', url: '/api/servicos', required: true },
         { key: 'mecanicos', url: '/api/mecanicos' },
@@ -246,6 +262,7 @@ export default function Home() {
 
       setClientes(getData('clientes') as Cliente[]);
       setVeiculos(getData('veiculos') as Veiculo[]);
+      setMarcasVeiculos(getData('catalogoVeiculos') as MarcaVeiculo[]);
       setOrdens(getData('ordens') as Ordem[]);
       setServicos(getData('servicos') as Servico[]);
       setMecanicos(getData('mecanicos') as Mecanico[]);
@@ -291,6 +308,11 @@ export default function Home() {
     () => veiculos.filter((veiculo) => !clienteSelecionado || veiculo.cliente_id === clienteSelecionado),
     [clienteSelecionado, veiculos]
   );
+
+  const modelosDaMarcaSelecionada = useMemo(() => {
+    if (!marcaVeiculoSelecionada || marcaVeiculoSelecionada === '__nova__') return [];
+    return marcasVeiculos.find((marca) => marca.id === marcaVeiculoSelecionada)?.modelos || [];
+  }, [marcaVeiculoSelecionada, marcasVeiculos]);
 
   const osAbertas = useMemo(
     () => ordens.filter((ordem) => ordem.status === 'aberta' || ordem.status === 'andamento'),
@@ -374,6 +396,40 @@ export default function Home() {
       await carregar();
     } catch (error) {
       setErro(error instanceof Error ? error.message : 'Erro inesperado ao salvar.');
+    } finally {
+      setSalvando('');
+    }
+  }
+
+  async function enviarVeiculo(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const body = Object.fromEntries(formData.entries());
+
+    setMsg('');
+    setErro('');
+    setSalvando('Veículo');
+
+    try {
+      const res = await fetch('/api/veiculos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json.error || 'Erro ao salvar veículo.');
+      }
+
+      form.reset();
+      setMarcaVeiculoSelecionada('');
+      setModeloVeiculoSelecionado('');
+      setMsg('Veículo salvo com sucesso.');
+      await carregar();
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Erro inesperado ao salvar veículo.');
     } finally {
       setSalvando('');
     }
@@ -740,7 +796,7 @@ export default function Home() {
             <h2>Novo veículo</h2>
             <Car size={18} />
           </div>
-          <form onSubmit={(e) => enviar(e, '/api/veiculos', 'Veículo')}>
+          <form onSubmit={enviarVeiculo}>
             <select name="cliente_id" required>
               <option value="">Selecione o cliente</option>
               {clientes.map((cliente) => (
@@ -753,10 +809,44 @@ export default function Home() {
               <input name="placa" placeholder="Placa" required />
               <input name="ano" placeholder="Ano" type="number" min="1900" max="2100" />
             </div>
-            <div className="row">
-              <input name="marca" placeholder="Marca" required />
-              <input name="modelo" placeholder="Modelo" required />
-            </div>
+            <select
+              name="marca_id"
+              value={marcaVeiculoSelecionada}
+              onChange={(event) => {
+                setMarcaVeiculoSelecionada(event.target.value);
+                setModeloVeiculoSelecionado('');
+              }}
+              required
+            >
+              <option value="">Marca</option>
+              {marcasVeiculos.map((marca) => (
+                <option key={marca.id} value={marca.id}>
+                  {marca.nome}
+                </option>
+              ))}
+              <option value="__nova__">Adicionar nova marca</option>
+            </select>
+            {marcaVeiculoSelecionada === '__nova__' && (
+              <input name="nova_marca" placeholder="Nome da nova marca" required />
+            )}
+            <select
+              name="modelo_id"
+              value={modeloVeiculoSelecionado}
+              onChange={(event) => setModeloVeiculoSelecionado(event.target.value)}
+              disabled={!marcaVeiculoSelecionada}
+              required
+            >
+              <option value="">Modelo</option>
+              {modelosDaMarcaSelecionada.map((modelo) => (
+                <option key={modelo.id} value={modelo.id}>
+                  {modelo.nome}
+                </option>
+              ))}
+              {marcaVeiculoSelecionada && <option value="__novo__">Adicionar novo modelo</option>}
+            </select>
+            {modeloVeiculoSelecionado === '__novo__' && (
+              <input name="novo_modelo" placeholder="Nome do novo modelo" required />
+            )}
             <input name="cor" placeholder="Cor" />
             <SubmitButton loading={salvando === 'Veículo'} label="Cadastrar veículo" />
           </form>
