@@ -38,7 +38,7 @@ Abra: http://localhost:3000
 NEXT_PUBLIC_APP_NAME="Oficina Mecânica"
 NEXT_PUBLIC_SUPABASE_URL="https://SEU-PROJETO.supabase.co"
 SUPABASE_SERVICE_ROLE_KEY="SUA_SERVICE_ROLE_KEY"
-```
+```ff
 
 A chave `SUPABASE_SERVICE_ROLE_KEY` não deve ser colocada no frontend. Neste projeto ela é usada apenas nas rotas API do Next.js.
 
