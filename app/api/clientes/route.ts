@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     const body = await req.json();
 
     if (!body.nome || !body.telefone) {
-      return NextResponse.json({ error: 'Nome e telefone sao obrigatorios.' }, { status: 400 });
+      return NextResponse.json({ error: 'Nome e telefone são obrigatórios.' }, { status: 400 });
     }
 
     const supabaseAdmin = getSupabaseAdmin();

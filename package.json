@@ -10,10 +10,12 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "latest",
+    "@types/pdfkit": "^0.17.6",
+    "lucide-react": "latest",
     "next": "latest",
+    "pdfkit": "^0.19.1",
     "react": "latest",
-    "react-dom": "latest",
-    "lucide-react": "latest"
+    "react-dom": "latest"
   },
   "devDependencies": {
     "@types/node": "latest",

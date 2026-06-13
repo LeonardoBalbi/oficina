@@ -56,7 +56,55 @@ create table if not exists public.fotos_os (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.app_usuarios (
+  id uuid primary key default uuid_generate_v4(),
+  nome text not null,
+  usuario text not null unique,
+  senha_hash text not null,
+  perfil text not null default 'mecanico' check (perfil in ('admin','mecanico')),
+  mecanico_id uuid references public.mecanicos(id) on delete set null,
+  permissoes jsonb not null default '{}'::jsonb,
+  ativo boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+do $$
+begin
+  alter table public.app_usuarios
+    add constraint app_usuarios_mecanico_id_fkey
+    foreign key (mecanico_id)
+    references public.mecanicos(id)
+    on delete set null;
+exception
+  when duplicate_object then null;
+end $$;
+
+insert into public.app_usuarios (nome, usuario, senha_hash, perfil, permissoes)
+values (
+  'Administrador',
+  'admin',
+  '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9',
+  'admin',
+  '{"clientes":true,"veiculos":true,"mecanicos":true,"servicos":true,"fornecedores":true,"pecas":true,"ordens":true,"orcamentos":true,"fotos":true,"listas":true,"usuarios":true}'::jsonb
+)
+on conflict (usuario) do nothing;
+
+insert into public.app_usuarios (nome, usuario, senha_hash, perfil, permissoes)
+values (
+  'Administrador',
+  'admina',
+  '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9',
+  'admin',
+  '{"clientes":true,"veiculos":true,"mecanicos":true,"servicos":true,"fornecedores":true,"pecas":true,"ordens":true,"orcamentos":true,"fotos":true,"listas":true,"usuarios":true}'::jsonb
+)
+on conflict (usuario) do nothing;
+
+insert into storage.buckets (id, name, public)
+values ('fotos-os', 'fotos-os', true)
+on conflict (id) do update set public = true;
+
 create index if not exists idx_ordens_mecanico on public.ordens_servico(mecanico_id);
 create index if not exists idx_pecas_fornecedor on public.pecas(fornecedor_id);
 create index if not exists idx_orcamentos_cliente on public.orcamentos(cliente_id);
 create index if not exists idx_fotos_os_ordem on public.fotos_os(ordem_id);
+create index if not exists idx_app_usuarios_usuario on public.app_usuarios(usuario);

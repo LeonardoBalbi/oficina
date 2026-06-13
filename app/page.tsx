@@ -1,21 +1,50 @@
-'use client';
+﻿'use client';
 
 import {
   AlertTriangle,
   Camera,
   Car,
   ClipboardList,
+  Download,
+  Edit3,
   FileText,
   Loader2,
+  MessageCircle,
   Package,
   Phone,
   Plus,
   RefreshCw,
+  Settings,
+  Trash2,
   Truck,
   UserRound,
-  Wrench
+  Wrench,
+  X
 } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+
+type PermissionKey =
+  | 'clientes'
+  | 'veiculos'
+  | 'mecanicos'
+  | 'servicos'
+  | 'fornecedores'
+  | 'pecas'
+  | 'ordens'
+  | 'orcamentos'
+  | 'fotos'
+  | 'listas';
+
+type AppUser = {
+  id: string;
+  nome: string;
+  usuario: string;
+  perfil: 'admin' | 'mecanico';
+  mecanico_id?: string | null;
+  permissoes?: Partial<Record<PermissionKey, boolean>>;
+  ativo: boolean;
+  mecanicos?: { nome: string } | null;
+};
 
 type Cliente = {
   id: string;
@@ -109,6 +138,19 @@ type FotoOS = {
   } | null;
 };
 
+const permissionOptions: { key: PermissionKey; label: string }[] = [
+  { key: 'clientes', label: 'Clientes' },
+  { key: 'veiculos', label: 'Veículos' },
+  { key: 'mecanicos', label: 'Mecânicos' },
+  { key: 'servicos', label: 'Serviços' },
+  { key: 'fornecedores', label: 'Fornecedores' },
+  { key: 'pecas', label: 'Estoque' },
+  { key: 'ordens', label: 'Ordens de serviço' },
+  { key: 'orcamentos', label: 'Orçamentos' },
+  { key: 'fotos', label: 'Fotos' },
+  { key: 'listas', label: 'Listas' },
+];
+
 const statusLabel = {
   aberta: 'Aberta',
   andamento: 'Em andamento',
@@ -129,6 +171,8 @@ const money = new Intl.NumberFormat('pt-BR', {
 });
 
 export default function Home() {
+  const [usuarioLogado, setUsuarioLogado] = useState<AppUser | null>(null);
+  const [usuarios, setUsuarios] = useState<AppUser[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [veiculos, setVeiculos] = useState<Veiculo[]>([]);
   const [ordens, setOrdens] = useState<Ordem[]>([]);
@@ -143,12 +187,16 @@ export default function Home() {
   const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState('');
+  const [usuarioEditando, setUsuarioEditando] = useState<AppUser | null>(null);
+  const [ultimaOrdemId, setUltimaOrdemId] = useState('');
 
-  async function carregar() {
+  async function carregar(userOverride?: AppUser | null) {
     setCarregando(true);
     setErro('');
 
     try {
+      const currentUser = userOverride ?? usuarioLogado;
+      const currentIsAdmin = currentUser?.perfil === 'admin';
       const endpoints = [
         { key: 'clientes', url: '/api/clientes', required: true },
         { key: 'veiculos', url: '/api/veiculos', required: true },
@@ -158,12 +206,19 @@ export default function Home() {
         { key: 'fornecedores', url: '/api/fornecedores' },
         { key: 'pecas', url: '/api/pecas' },
         { key: 'orcamentos', url: '/api/orcamentos' },
-        { key: 'fotos', url: '/api/fotos' }
+        { key: 'fotos', url: '/api/fotos' },
+        ...(currentIsAdmin
+          ? [
+              { key: 'usuarios', url: '/api/usuarios' }
+            ]
+          : [])
       ];
 
       const resultados = await Promise.all(
         endpoints.map(async (endpoint) => {
-          const res = await fetch(endpoint.url);
+          const res = await fetch(endpoint.url, {
+            headers: currentUser ? { 'x-app-user-id': currentUser.id } : {}
+          });
           const body = await res.json();
 
           if (!res.ok) {
@@ -174,7 +229,7 @@ export default function Home() {
             };
           }
 
-          return { ...endpoint, data: Array.isArray(body) ? body : [], error: '' };
+          return { ...endpoint, data: body, error: '' };
         })
       );
 
@@ -195,6 +250,7 @@ export default function Home() {
       setPecas(getData('pecas') as Peca[]);
       setOrcamentos(getData('orcamentos') as Orcamento[]);
       setFotos(getData('fotos') as FotoOS[]);
+      setUsuarios(getData('usuarios') as AppUser[]);
 
       const falhasOpcionais = resultados.filter((resultado) => !resultado.required && resultado.error);
 
@@ -209,8 +265,24 @@ export default function Home() {
   }
 
   useEffect(() => {
-    carregar();
+    const session = window.localStorage.getItem('oficina_user');
+
+    if (session) {
+      const user = JSON.parse(session) as AppUser;
+      setUsuarioLogado(user);
+      carregar(user);
+      return;
+    }
+
+    setCarregando(false);
   }, []);
+
+  const isAdmin = usuarioLogado?.perfil === 'admin';
+  const pode = (key: PermissionKey) => isAdmin || Boolean(usuarioLogado?.permissoes?.[key]);
+  const adminHeaders = () => ({
+    'Content-Type': 'application/json',
+    'x-app-user-id': usuarioLogado?.id || ''
+  });
 
   const veiculosDoCliente = useMemo(
     () => veiculos.filter((veiculo) => !clienteSelecionado || veiculo.cliente_id === clienteSelecionado),
@@ -274,6 +346,250 @@ export default function Home() {
     }
   }
 
+  async function enviarOrdem(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const body = Object.fromEntries(formData.entries());
+
+    setMsg('');
+    setErro('');
+    setSalvando('Ordem de serviço');
+
+    try {
+      const res = await fetch('/api/ordens', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json.error || 'Erro ao salvar OS.');
+      }
+
+      form.reset();
+      setClienteSelecionado('');
+      setUltimaOrdemId(json.id || '');
+      setMsg('Ordem de serviço salva com sucesso.');
+      await carregar();
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Erro inesperado ao salvar OS.');
+    } finally {
+      setSalvando('');
+    }
+  }
+
+  function osPdfUrl(id: string) {
+    return `/api/export/ordens?format=pdf&id=${encodeURIComponent(id)}`;
+  }
+
+  function osExcelUrl(id: string) {
+    return `/api/export/ordens?format=excel&id=${encodeURIComponent(id)}`;
+  }
+
+  function ordemPorId(id: string) {
+    return ordens.find((ordem) => ordem.id === id);
+  }
+
+  function enviarOsWhatsApp(ordem: Ordem) {
+    const telefone = String(ordem.clientes?.telefone || '').replace(/\D/g, '');
+    if (!telefone) {
+      setErro('Cliente sem telefone para envio pelo WhatsApp.');
+      return;
+    }
+    const phone = telefone.startsWith('55') ? telefone : `55${telefone}`;
+    const pdfUrl = `${window.location.origin}${osPdfUrl(ordem.id)}`;
+    const excelUrl = `${window.location.origin}${osExcelUrl(ordem.id)}`;
+    const texto = [
+      `Olá, ${ordem.clientes?.nome || ''}.`,
+      `Segue a Ordem de Serviço ${ordem.id.slice(0, 8).toUpperCase()}.`,
+      `Veículo: ${ordem.veiculos?.placa || ''} ${ordem.veiculos?.marca || ''} ${ordem.veiculos?.modelo || ''}`.trim(),
+      `PDF: ${pdfUrl}`,
+      `Excel: ${excelUrl}`
+    ].join('\n');
+
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(texto)}`, '_blank', 'noopener,noreferrer');
+  }
+
+  async function login(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+
+    setErro('');
+    setMsg('');
+    setSalvando('Login');
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.fromEntries(formData.entries()))
+      });
+      const user = await res.json();
+
+      if (!res.ok) {
+        throw new Error(user.error || 'Erro ao entrar.');
+      }
+
+      setUsuarioLogado(user);
+      window.localStorage.setItem('oficina_user', JSON.stringify(user));
+      setMsg(`Bem-vindo, ${user.nome}.`);
+      await carregar(user);
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Erro inesperado ao entrar.');
+    } finally {
+      setSalvando('');
+    }
+  }
+
+  function logout() {
+    window.localStorage.removeItem('oficina_user');
+    setUsuarioLogado(null);
+    setMsg('');
+    setErro('');
+  }
+
+  async function enviarUsuario(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const permissoes = permissionOptions.reduce<Partial<Record<PermissionKey, boolean>>>((acc, option) => {
+      acc[option.key] = formData.getAll('permissoes').includes(option.key);
+      return acc;
+    }, {});
+
+    setMsg('');
+    setErro('');
+    setSalvando('Usuário');
+
+    try {
+      const res = await fetch('/api/usuarios', {
+        method: usuarioEditando ? 'PATCH' : 'POST',
+        headers: adminHeaders(),
+        body: JSON.stringify({
+          id: usuarioEditando?.id,
+          nome: formData.get('nome'),
+          usuario: formData.get('usuario'),
+          senha: formData.get('senha'),
+          perfil: formData.get('perfil'),
+          mecanico_id: formData.get('mecanico_id'),
+          permissoes,
+          ativo: formData.get('ativo') === 'on'
+        })
+      });
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json.error || 'Erro ao salvar usuário.');
+      }
+
+      form.reset();
+      setUsuarioEditando(null);
+      setMsg(usuarioEditando ? 'Usuário atualizado com sucesso.' : 'Usuário salvo com sucesso.');
+      await carregar();
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Erro inesperado ao salvar usuário.');
+    } finally {
+      setSalvando('');
+    }
+  }
+
+  async function baixarArquivo(url: string, filename: string, label: string) {
+    setMsg('');
+    setErro('');
+    setSalvando(label);
+
+    try {
+      const res = await fetch(url, {
+        headers: usuarioLogado ? { 'x-app-user-id': usuarioLogado.id } : {}
+      });
+
+      if (!res.ok) {
+        const json = await res.json();
+        throw new Error(json.error || 'Erro ao exportar arquivo.');
+      }
+
+      const blob = await res.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+      setMsg(`${label} exportado com sucesso.`);
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Erro inesperado ao exportar.');
+    } finally {
+      setSalvando('');
+    }
+  }
+
+  function cancelarEdicaoUsuario() {
+    setUsuarioEditando(null);
+  }
+
+  async function excluirUsuario(user: AppUser) {
+    if (!window.confirm(`Excluir o usuário ${user.nome}?`)) return;
+
+    setMsg('');
+    setErro('');
+    setSalvando(user.id);
+
+    try {
+      const res = await fetch('/api/usuarios', {
+        method: 'DELETE',
+        headers: adminHeaders(),
+        body: JSON.stringify({ id: user.id })
+      });
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json.error || 'Erro ao excluir usuário.');
+      }
+
+      setMsg('Usuário excluído.');
+      await carregar();
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Erro inesperado ao excluir usuário.');
+    } finally {
+      setSalvando('');
+    }
+  }
+
+  async function enviarFoto(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+
+    setMsg('');
+    setErro('');
+    setSalvando('Foto');
+
+    try {
+      const res = await fetch('/api/fotos', {
+        method: 'POST',
+        body: formData
+      });
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json.error || 'Erro ao salvar foto.');
+      }
+
+      form.reset();
+      setMsg('Foto adicionada com sucesso.');
+      await carregar();
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Erro inesperado ao salvar foto.');
+    } finally {
+      setSalvando('');
+    }
+  }
+
   async function atualizarStatus(id: string, status: Ordem['status']) {
     setMsg('');
     setErro('');
@@ -292,12 +608,35 @@ export default function Home() {
       }
 
       setMsg('Ordem atualizada.');
+      if (status === 'finalizada') setUltimaOrdemId(id);
       await carregar();
     } catch (error) {
       setErro(error instanceof Error ? error.message : 'Erro inesperado ao atualizar.');
     } finally {
       setSalvando('');
     }
+  }
+
+  if (!usuarioLogado) {
+    return (
+      <main className="loginShell">
+        <section className="loginPanel">
+          <img className="loginLogo" src="/garage-logo.png" alt="Garage Auto Service" />
+          <div>
+            <span className="eyebrow">Acesso restrito</span>
+            <h1>Garage Auto Service</h1>
+            <p>Entre com o perfil da oficina para acessar o painel.</p>
+          </div>
+          {(msg || erro) && <div className={erro ? 'notice error' : 'notice'}>{erro || msg}</div>}
+          <form onSubmit={login}>
+            <input name="usuario" placeholder="Usuário" autoComplete="username" required />
+            <input name="senha" placeholder="Senha" type="password" autoComplete="current-password" required />
+            <SubmitButton loading={salvando === 'Login'} label="Entrar" />
+          </form>
+          <p className="loginHint">Admin inicial: admina / admin123 ou admin / admin123</p>
+        </section>
+      </main>
+    );
   }
 
   return (
@@ -311,24 +650,42 @@ export default function Home() {
             <p>Controle clientes, veículos, serviços e ordens de serviço com a presença forte da sua marca.</p>
           </div>
         </div>
-        <button className="iconButton" type="button" onClick={carregar} title="Atualizar dados">
-          {carregando ? <Loader2 className="spin" size={18} /> : <RefreshCw size={18} />}
-        </button>
+        <div className="topActions">
+          <span className="userPill">
+            {usuarioLogado.nome} | {usuarioLogado.perfil === 'admin' ? 'Admin' : 'Mecânico'}
+          </span>
+          <button className="iconButton" type="button" onClick={() => carregar()} title="Atualizar dados">
+            {carregando ? <Loader2 className="spin" size={18} /> : <RefreshCw size={18} />}
+          </button>
+          <button className="iconButton" type="button" onClick={logout} title="Sair">
+            Sair
+          </button>
+        </div>
       </header>
 
       {(msg || erro) && <div className={erro ? 'notice error' : 'notice'}>{erro || msg}</div>}
+
+      <nav className="quickNav" aria-label="Atalhos do painel">
+        {(pode('clientes') || pode('veiculos') || pode('mecanicos') || pode('servicos') || pode('fornecedores')) && (
+          <a href="#cadastros">Cadastros</a>
+        )}
+        {pode('ordens') && <a href="#nova-os">OS</a>}
+        {pode('pecas') && <a href="#estoque">Estoque</a>}
+        {pode('listas') && <a href="#listas">Listas</a>}
+        {isAdmin && <a href="#admin">Admin</a>}
+      </nav>
 
       <section className="metrics">
         <Metric icon={<UserRound size={20} />} label="Clientes" value={clientes.length} />
         <Metric icon={<Car size={20} />} label="Veículos" value={veiculos.length} />
         <Metric icon={<ClipboardList size={20} />} label="OS ativas" value={osAbertas.length} />
-        <Metric icon={<FileText size={20} />} label="Orcamentos" value={orcamentosAbertos.length} />
+        <Metric icon={<FileText size={20} />} label="Orçamentos" value={orcamentosAbertos.length} />
         <Metric icon={<AlertTriangle size={20} />} label="Estoque baixo" value={estoqueBaixo.length} />
         <Metric icon={<Wrench size={20} />} label="Previsto" value={money.format(faturamentoPrevisto)} />
       </section>
 
-      <section className="workspace">
-        <div className="panel">
+      <section className="workspace" id="cadastros">
+        {pode('clientes') && <div className="panel">
           <div className="panelHeader">
             <h2>Novo cliente</h2>
             <UserRound size={18} />
@@ -340,9 +697,9 @@ export default function Home() {
             <input name="endereco" placeholder="Endereço" />
             <SubmitButton loading={salvando === 'Cliente'} label="Cadastrar cliente" />
           </form>
-        </div>
+        </div>}
 
-        <div className="panel">
+        {pode('veiculos') && <div className="panel">
           <div className="panelHeader">
             <h2>Novo veículo</h2>
             <Car size={18} />
@@ -367,9 +724,9 @@ export default function Home() {
             <input name="cor" placeholder="Cor" />
             <SubmitButton loading={salvando === 'Veículo'} label="Cadastrar veículo" />
           </form>
-        </div>
+        </div>}
 
-        <div className="panel">
+        {pode('mecanicos') && <div className="panel">
           <div className="panelHeader">
             <h2>Novo mecânico</h2>
             <UserRound size={18} />
@@ -380,9 +737,9 @@ export default function Home() {
             <input name="especialidade" placeholder="Especialidade" />
             <SubmitButton loading={salvando === 'Mecânico'} label="Cadastrar mecânico" />
           </form>
-        </div>
+        </div>}
 
-        <div className="panel">
+        {pode('servicos') && <div className="panel">
           <div className="panelHeader">
             <h2>Novo serviço</h2>
             <Wrench size={18} />
@@ -393,9 +750,9 @@ export default function Home() {
             <textarea name="descricao" placeholder="Descrição" />
             <SubmitButton loading={salvando === 'Serviço'} label="Cadastrar serviço" />
           </form>
-        </div>
+        </div>}
 
-        <div className="panel">
+        {pode('fornecedores') && <div className="panel">
           <div className="panelHeader">
             <h2>Novo fornecedor</h2>
             <Truck size={18} />
@@ -407,9 +764,9 @@ export default function Home() {
             <input name="documento" placeholder="CNPJ ou CPF" />
             <SubmitButton loading={salvando === 'Fornecedor'} label="Cadastrar fornecedor" />
           </form>
-        </div>
+        </div>}
 
-        <div className="panel">
+        {pode('pecas') && <div className="panel">
           <div className="panelHeader">
             <h2>Nova peça</h2>
             <Package size={18} />
@@ -437,14 +794,14 @@ export default function Home() {
             </div>
             <SubmitButton loading={salvando === 'Peça'} label="Cadastrar peça" />
           </form>
-        </div>
+        </div>}
 
-        <div className="panel">
+        {pode('ordens') && <div className="panel" id="nova-os">
           <div className="panelHeader">
             <h2>Nova ordem de serviço</h2>
             <ClipboardList size={18} />
           </div>
-          <form onSubmit={(e) => enviar(e, '/api/ordens', 'Ordem de serviço')}>
+          <form onSubmit={enviarOrdem}>
             <select
               name="cliente_id"
               required
@@ -489,9 +846,18 @@ export default function Home() {
             </select>
             <SubmitButton loading={salvando === 'Ordem de serviço'} label="Abrir OS" />
           </form>
-        </div>
+          {ultimaOrdemId && ordemPorId(ultimaOrdemId) && (
+            <OsActions
+              ordem={ordemPorId(ultimaOrdemId)!}
+              loading={salvando}
+              onDownload={(ordem) => baixarArquivo(osPdfUrl(ordem.id), `os-${ordem.id.slice(0, 8).toUpperCase()}.pdf`, 'OS PDF')}
+              onExcel={(ordem) => baixarArquivo(osExcelUrl(ordem.id), `os-${ordem.id.slice(0, 8).toUpperCase()}.xls`, 'OS Excel')}
+              onWhatsApp={enviarOsWhatsApp}
+            />
+          )}
+        </div>}
 
-        <div className="panel">
+        {pode('orcamentos') && <div className="panel">
           <div className="panelHeader">
             <h2>Novo orçamento</h2>
             <FileText size={18} />
@@ -526,14 +892,14 @@ export default function Home() {
             </select>
             <SubmitButton loading={salvando === 'Orçamento'} label="Salvar orçamento" />
           </form>
-        </div>
+        </div>}
 
-        <div className="panel">
+        {pode('fotos') && <div className="panel">
           <div className="panelHeader">
             <h2>Foto antes/depois</h2>
             <Camera size={18} />
           </div>
-          <form onSubmit={(e) => enviar(e, '/api/fotos', 'Foto')}>
+          <form onSubmit={enviarFoto}>
             <select name="ordem_id" required>
               <option value="">Ordem de serviço</option>
               {ordens.map((ordem) => (
@@ -546,14 +912,116 @@ export default function Home() {
               <option value="antes">Antes</option>
               <option value="depois">Depois</option>
             </select>
-            <input name="url" placeholder="URL da foto" type="url" required />
+            <div className="fileActions">
+              <label>
+                Arquivo do celular
+                <input name="arquivo" accept="image/*" type="file" />
+              </label>
+              <label>
+                Abrir câmera
+                <input name="camera" accept="image/*" capture="environment" type="file" />
+              </label>
+            </div>
+            <input name="url" placeholder="Ou cole a URL da foto" type="url" />
             <input name="legenda" placeholder="Legenda" />
             <SubmitButton loading={salvando === 'Foto'} label="Adicionar foto" />
           </form>
-        </div>
+        </div>}
+
+        {isAdmin && <div className="adminSection" id="admin">
+          <div className="sectionTitle">
+            <Settings size={18} />
+            <h2>Administração</h2>
+          </div>
+
+          <div className="panel">
+            <div className="panelHeader">
+              <h2>Backup e usuários</h2>
+              <button
+                className="iconButton"
+                type="button"
+                onClick={() => baixarArquivo('/api/export/sql', `oficina-backup-${new Date().toISOString().slice(0, 10)}.sql`, 'Banco SQL')}
+                disabled={salvando === 'Banco SQL'}
+                title="Exportar banco em SQL"
+              >
+                {salvando === 'Banco SQL' ? <Loader2 className="spin" size={16} /> : <Download size={16} />}
+              </button>
+            </div>
+            <form onSubmit={enviarUsuario} key={usuarioEditando?.id || 'novo-usuario'}>
+              <div className="row">
+                <input name="nome" placeholder="Nome do usuário" defaultValue={usuarioEditando?.nome || ''} required />
+                <input name="usuario" placeholder="Login" defaultValue={usuarioEditando?.usuario || ''} required />
+              </div>
+              <div className="row">
+                <input
+                  name="senha"
+                  placeholder={usuarioEditando ? 'Nova senha (opcional)' : 'Senha inicial'}
+                  type="password"
+                  required={!usuarioEditando}
+                />
+                <select name="perfil" defaultValue={usuarioEditando?.perfil || 'mecanico'}>
+                  <option value="mecanico">Mecânico</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <select name="mecanico_id" defaultValue={usuarioEditando?.mecanico_id || ''}>
+                <option value="">Vincular mecânico</option>
+                {mecanicos.map((mecanico) => (
+                  <option key={mecanico.id} value={mecanico.id}>{mecanico.nome}</option>
+                ))}
+              </select>
+              <div className="permissionGrid">
+                {permissionOptions.map((option) => (
+                  <label key={option.key}>
+                    <input
+                      name="permissoes"
+                      type="checkbox"
+                      value={option.key}
+                      defaultChecked={usuarioEditando ? Boolean(usuarioEditando.permissoes?.[option.key]) : true}
+                    />
+                    {option.label}
+                  </label>
+                ))}
+              </div>
+              <label className="activeToggle">
+                <input name="ativo" type="checkbox" defaultChecked={usuarioEditando ? usuarioEditando.ativo : true} />
+                Usuário ativo
+              </label>
+              <div className="formActions">
+                {usuarioEditando && (
+                  <button className="ghostButton" type="button" onClick={cancelarEdicaoUsuario}>
+                    <X size={16} />
+                    Cancelar
+                  </button>
+                )}
+                <SubmitButton loading={salvando === 'Usuário'} label={usuarioEditando ? 'Salvar usuário' : 'Criar usuário'} />
+              </div>
+            </form>
+            <div className="miniList">
+              {usuarios.map((user) => (
+                <div className="compactItem" key={user.id}>
+                  <div>
+                    <strong>{user.nome}</strong>
+                    <span>{user.usuario} | {user.perfil === 'admin' ? 'Admin' : 'Mecânico'} | {user.ativo ? 'Ativo' : 'Inativo'}</span>
+                  </div>
+                  <div className="inlineActions">
+                    <button className="ghostButton compactButton" type="button" onClick={() => setUsuarioEditando(user)}>
+                      <Edit3 size={15} />
+                      Editar
+                    </button>
+                    <button className="ghostButton dangerButton compactButton" type="button" onClick={() => excluirUsuario(user)} disabled={salvando === user.id}>
+                      <Trash2 size={15} />
+                      Excluir
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>}
       </section>
 
-      <section className="lists">
+      {pode('listas') && <section className="lists" id="listas">
         <div className="panel listPanel">
           <div className="panelHeader">
             <h2>Ordens recentes</h2>
@@ -587,6 +1055,16 @@ export default function Home() {
                       >
                         Finalizar
                       </button>
+                    )}
+                    {ordem.status === 'finalizada' && (
+                      <OsActions
+                        ordem={ordem}
+                        loading={salvando}
+                        compact
+                        onDownload={(item) => baixarArquivo(osPdfUrl(item.id), `os-${item.id.slice(0, 8).toUpperCase()}.pdf`, 'OS PDF')}
+                        onExcel={(item) => baixarArquivo(osExcelUrl(item.id), `os-${item.id.slice(0, 8).toUpperCase()}.xls`, 'OS Excel')}
+                        onWhatsApp={enviarOsWhatsApp}
+                      />
                     )}
                   </div>
                 </article>
@@ -658,7 +1136,7 @@ export default function Home() {
           )}
         </div>
 
-        <div className="panel listPanel">
+        <div className="panel listPanel" id="estoque">
           <div className="panelHeader">
             <h2>Estoque de peças</h2>
             <Package size={18} />
@@ -748,8 +1226,41 @@ export default function Home() {
             </div>
           )}
         </div>
-      </section>
+      </section>}
     </main>
+  );
+}
+
+function OsActions({
+  ordem,
+  loading,
+  compact = false,
+  onDownload,
+  onExcel,
+  onWhatsApp
+}: {
+  ordem: Ordem;
+  loading: string;
+  compact?: boolean;
+  onDownload: (ordem: Ordem) => void;
+  onExcel: (ordem: Ordem) => void;
+  onWhatsApp: (ordem: Ordem) => void;
+}) {
+  return (
+    <div className={compact ? 'osActions compactOsActions' : 'osActions'}>
+      <button type="button" className="ghostButton" disabled={loading === 'OS PDF'} onClick={() => onDownload(ordem)}>
+        <Download size={15} />
+        PDF
+      </button>
+      <button type="button" className="ghostButton" disabled={loading === 'OS Excel'} onClick={() => onExcel(ordem)}>
+        <Download size={15} />
+        Excel
+      </button>
+      <button type="button" className="ghostButton whatsappButton" onClick={() => onWhatsApp(ordem)}>
+        <MessageCircle size={15} />
+        WhatsApp
+      </button>
+    </div>
   );
 }
 
@@ -780,3 +1291,5 @@ function formatDate(value: string) {
   if (!value) return '-';
   return new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(new Date(value));
 }
+
+

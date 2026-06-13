@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     const body = await req.json();
 
     if (!body.cliente_id || !body.descricao) {
-      return NextResponse.json({ error: 'Cliente e descricao do orcamento sao obrigatorios.' }, { status: 400 });
+      return NextResponse.json({ error: 'Cliente e descrição do orçamento são obrigatórios.' }, { status: 400 });
     }
 
     const status = statuses.includes(body.status) ? body.status : 'rascunho';

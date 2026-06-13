@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     const body = await req.json();
 
     if (!body.cliente_id || !body.placa || !body.marca || !body.modelo) {
-      return NextResponse.json({ error: 'Cliente, placa, marca e modelo sao obrigatorios.' }, { status: 400 });
+      return NextResponse.json({ error: 'Cliente, placa, marca e modelo são obrigatórios.' }, { status: 400 });
     }
 
     const supabaseAdmin = getSupabaseAdmin();

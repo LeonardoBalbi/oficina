@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     const body = await req.json();
 
     if (!body.cliente_id || !body.veiculo_id || !body.descricao_problema) {
-      return NextResponse.json({ error: 'Cliente, veiculo e problema relatado sao obrigatorios.' }, { status: 400 });
+      return NextResponse.json({ error: 'Cliente, veículo e problema relatado são obrigatórios.' }, { status: 400 });
     }
 
     const status = statuses.includes(body.status) ? body.status : 'aberta';
@@ -55,7 +55,7 @@ export async function PATCH(req: Request) {
     const body = await req.json();
 
     if (!body.id || !statuses.includes(body.status)) {
-      return NextResponse.json({ error: 'ID da ordem e status valido sao obrigatorios.' }, { status: 400 });
+      return NextResponse.json({ error: 'ID da ordem e status válido são obrigatórios.' }, { status: 400 });
     }
 
     const supabaseAdmin = getSupabaseAdmin();

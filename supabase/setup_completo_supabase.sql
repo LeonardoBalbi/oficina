@@ -1,4 +1,3 @@
--- Cole este SQL no Supabase > SQL Editor > Run
 
 create extension if not exists "uuid-ossp";
 

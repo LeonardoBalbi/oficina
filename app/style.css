@@ -49,6 +49,45 @@ textarea {
   padding: 26px 0 44px;
 }
 
+.loginShell {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.loginPanel {
+  width: min(420px, 100%);
+  padding: 22px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.035)), var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.loginLogo {
+  width: 132px;
+  display: block;
+  margin-bottom: 16px;
+}
+
+.loginPanel h1 {
+  margin: 0;
+  color: var(--metal);
+  font-size: 34px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.loginPanel p {
+  color: var(--muted);
+}
+
+.loginHint {
+  margin: 12px 0 0;
+  font-size: 13px;
+}
+
 .top {
   position: relative;
   display: flex;
@@ -180,6 +219,32 @@ button:disabled {
   box-shadow: none;
 }
 
+.topActions {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.topActions .iconButton {
+  width: auto;
+  min-width: 44px;
+  padding: 0 11px;
+}
+
+.userPill {
+  max-width: 240px;
+  padding: 9px 11px;
+  overflow-wrap: anywhere;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .notice {
   margin-bottom: 16px;
   padding: 12px 14px;
@@ -194,6 +259,10 @@ button:disabled {
   color: #fff;
   background: linear-gradient(135deg, rgba(255, 43, 34, 0.88), rgba(126, 14, 10, 0.96));
   border-color: rgba(255, 102, 96, 0.8);
+}
+
+.quickNav {
+  display: none;
 }
 
 .metrics {
@@ -253,6 +322,37 @@ button:disabled {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
   margin-bottom: 18px;
+}
+
+.adminSection {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  padding-top: 8px;
+}
+
+.sectionTitle {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--brand);
+}
+
+.sectionTitle h2 {
+  margin: 0;
+  color: var(--metal);
+  font-size: 18px;
+  text-transform: uppercase;
+}
+
+#cadastros,
+#nova-os,
+#estoque,
+#listas,
+#usuarios {
+  scroll-margin-top: 78px;
 }
 
 .panel {
@@ -327,6 +427,116 @@ option {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.fileActions,
+.permissionGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.fileActions label,
+.permissionGrid label {
+  display: grid;
+  gap: 7px;
+  min-height: 46px;
+  padding: 10px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(216, 221, 229, 0.16);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.permissionGrid label {
+  display: flex;
+  align-items: center;
+}
+
+.fileActions input,
+.permissionGrid input {
+  margin: 0;
+}
+
+.miniList {
+  margin-top: 12px;
+}
+
+.exportGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.exportGrid button {
+  min-height: 38px;
+  padding: 8px 9px;
+  font-size: 12px;
+}
+
+.activeToggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 10px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.activeToggle input {
+  width: auto;
+  min-height: auto;
+  margin: 0;
+}
+
+.formActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.formActions button:only-child {
+  grid-column: 1 / -1;
+}
+
+.compactButton {
+  min-width: 98px;
+}
+
+.inlineActions,
+.osActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.osActions {
+  margin-top: 12px;
+}
+
+.compactOsActions {
+  justify-content: flex-end;
+  margin-top: 0;
+}
+
+.osActions .ghostButton,
+.inlineActions .ghostButton {
+  width: auto;
+}
+
+.whatsappButton {
+  border-color: rgba(66, 211, 131, 0.5);
+  background: rgba(66, 211, 131, 0.12);
+}
+
+.dangerButton {
+  border-color: rgba(255, 91, 85, 0.58);
+  background: rgba(255, 91, 85, 0.14);
 }
 
 .listPanel {
@@ -538,6 +748,7 @@ option {
   .top,
   .workspace,
   .lists,
+  .adminSection,
   .row,
   .splitList,
   .brandHero {
@@ -595,11 +806,70 @@ option {
     min-height: 40px;
   }
 
+  .topActions {
+    position: static;
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: stretch;
+    margin-top: 12px;
+  }
+
+  .topActions .iconButton {
+    position: static;
+    min-height: 38px;
+    font-size: 12px;
+  }
+
+  .userPill {
+    max-width: none;
+    display: flex;
+    align-items: center;
+    font-size: 11px;
+  }
+
   .notice {
     margin-bottom: 10px;
     padding: 10px 12px;
     font-size: 13px;
     line-height: 1.35;
+  }
+
+  .quickNav {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: grid;
+    grid-template-columns: repeat(4, max-content);
+    gap: 7px;
+    margin: 0 -7px 10px;
+    padding: 7px;
+    overflow-x: auto;
+    background: rgba(5, 5, 6, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    backdrop-filter: blur(12px);
+    scrollbar-width: none;
+  }
+
+  .quickNav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .quickNav a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    padding: 0 12px;
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 900;
+    text-decoration: none;
+    text-transform: uppercase;
+    white-space: nowrap;
   }
 
   .metrics {
@@ -674,6 +944,14 @@ option {
 
   .listPanel {
     min-height: 0;
+  }
+
+  .fileActions,
+  .permissionGrid,
+  .formActions,
+  .exportGrid {
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 
   .item {

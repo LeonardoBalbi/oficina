@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -20,10 +21,11 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const contentType = req.headers.get('content-type') || '';
+    const body = contentType.includes('multipart/form-data') ? await parseMultipart(req) : await req.json();
 
     if (!body.ordem_id || !body.url || !tipos.includes(body.tipo)) {
-      return NextResponse.json({ error: 'Ordem, tipo e URL da foto sao obrigatorios.' }, { status: 400 });
+      return NextResponse.json({ error: 'Ordem, tipo e URL da foto são obrigatórios.' }, { status: 400 });
     }
 
     const supabaseAdmin = getSupabaseAdmin();
@@ -43,6 +45,40 @@ export async function POST(req: Request) {
   } catch (error) {
     return serverError(error);
   }
+}
+
+async function parseMultipart(req: Request) {
+  const formData = await req.formData();
+  const arquivo = formData.get('arquivo');
+  const camera = formData.get('camera');
+  const file = arquivo instanceof File && arquivo.size > 0 ? arquivo : camera;
+  const supabaseAdmin = getSupabaseAdmin();
+  let url = String(formData.get('url') || '').trim();
+
+  if (file instanceof File && file.size > 0) {
+    await supabaseAdmin.storage.createBucket('fotos-os', { public: true }).catch(() => null);
+
+    const extension = file.name.split('.').pop() || 'jpg';
+    const path = `${formData.get('ordem_id')}/${Date.now()}-${randomUUID()}.${extension}`;
+    const { error } = await supabaseAdmin.storage.from('fotos-os').upload(path, file, {
+      contentType: file.type || 'image/jpeg',
+      upsert: false
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const { data } = supabaseAdmin.storage.from('fotos-os').getPublicUrl(path);
+    url = data.publicUrl;
+  }
+
+  return {
+    ordem_id: String(formData.get('ordem_id') || ''),
+    tipo: String(formData.get('tipo') || ''),
+    url,
+    legenda: String(formData.get('legenda') || '')
+  };
 }
 
 function serverError(error: unknown) {
