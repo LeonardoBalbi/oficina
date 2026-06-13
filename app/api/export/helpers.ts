@@ -14,6 +14,7 @@ export const dataTables = [
   'fornecedores',
   'pecas',
   'ordens_servico',
+  'ordem_servicos_itens',
   'orcamentos',
   'fotos_os',
   'app_usuarios'
@@ -131,7 +132,7 @@ export async function fetchTable(supabaseAdmin: SupabaseClient, tableName: strin
   const { data, error } = await supabaseAdmin.from(tableName).select('*');
 
   if (error) {
-    if (['marcas_veiculos', 'modelos_veiculos'].includes(tableName)) return [];
+    if (['marcas_veiculos', 'modelos_veiculos', 'ordem_servicos_itens'].includes(tableName)) return [];
     throw new Error(`Erro ao exportar ${tableName}: ${error.message}`);
   }
 

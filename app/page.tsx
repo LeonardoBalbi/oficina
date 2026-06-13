@@ -36,6 +36,8 @@ type PermissionKey =
   | 'fotos'
   | 'listas';
 
+type TabKey = 'dashboard' | 'cadastros' | 'os' | 'orcamentos' | 'estoque' | 'listas' | 'admin';
+
 type AppUser = {
   id: string;
   nome: string;
@@ -90,6 +92,16 @@ type Ordem = {
   clientes?: { nome: string; telefone: string };
   veiculos?: { placa: string; marca: string; modelo: string };
   mecanicos?: { nome: string } | null;
+  ordem_servicos_itens?: OrdemServicoItem[];
+};
+
+type OrdemServicoItem = {
+  id: string;
+  ordem_id: string;
+  servico_id?: string | null;
+  nome: string;
+  valor: number;
+  quantidade: number;
 };
 
 type Servico = {
@@ -233,8 +245,13 @@ export default function Home() {
   const [marcaVeiculoSelecionada, setMarcaVeiculoSelecionada] = useState('');
   const [modeloVeiculoSelecionado, setModeloVeiculoSelecionado] = useState('');
   const [servicoSelecionado, setServicoSelecionado] = useState('');
+  const [servicoEditando, setServicoEditando] = useState<Servico | null>(null);
+  const [criandoServico, setCriandoServico] = useState(false);
+  const [servicoNome, setServicoNome] = useState('');
   const [servicoValor, setServicoValor] = useState('');
   const [servicoDescricao, setServicoDescricao] = useState('');
+  const [servicosOsSelecionados, setServicosOsSelecionados] = useState<string[]>([]);
+  const [valorEstimadoOs, setValorEstimadoOs] = useState('');
   const [buscaOrdens, setBuscaOrdens] = useState('');
   const [msg, setMsg] = useState('');
   const [erro, setErro] = useState('');
@@ -243,6 +260,7 @@ export default function Home() {
   const [usuarioEditando, setUsuarioEditando] = useState<AppUser | null>(null);
   const [ultimaOrdemId, setUltimaOrdemId] = useState('');
   const [acaoOrdemId, setAcaoOrdemId] = useState('');
+  const [abaAtiva, setAbaAtiva] = useState<TabKey>('dashboard');
 
   async function carregar(userOverride?: AppUser | null) {
     setCarregando(true);
@@ -339,6 +357,19 @@ export default function Home() {
     'Content-Type': 'application/json',
     'x-app-user-id': usuarioLogado?.id || ''
   });
+  const abas = [
+    { key: 'dashboard' as TabKey, label: 'Início', visible: true },
+    {
+      key: 'cadastros' as TabKey,
+      label: 'Cadastros',
+      visible: pode('clientes') || pode('veiculos') || pode('mecanicos') || pode('servicos') || pode('fornecedores')
+    },
+    { key: 'os' as TabKey, label: 'OS', visible: pode('ordens') || pode('fotos') },
+    { key: 'orcamentos' as TabKey, label: 'Orçamentos', visible: pode('orcamentos') },
+    { key: 'estoque' as TabKey, label: 'Estoque', visible: pode('pecas') },
+    { key: 'listas' as TabKey, label: 'Listas', visible: pode('listas') },
+    { key: 'admin' as TabKey, label: 'Admin', visible: isAdmin }
+  ].filter((aba) => aba.visible);
 
   const veiculosDoCliente = useMemo(
     () => veiculos.filter((veiculo) => !clienteSelecionado || veiculo.cliente_id === clienteSelecionado),
@@ -368,6 +399,21 @@ export default function Home() {
 
     return Array.from(mapa.values()).sort((a, b) => a.nome.localeCompare(b.nome));
   }, [servicos]);
+
+  const totalServicosOs = useMemo(
+    () =>
+      servicosOsSelecionados.reduce((total, servicoId) => {
+        const servico = servicos.find((item) => item.id === servicoId);
+        return total + Number(servico?.valor || 0);
+      }, 0),
+    [servicos, servicosOsSelecionados]
+  );
+
+  useEffect(() => {
+    if (servicosOsSelecionados.length > 0) {
+      setValorEstimadoOs(String(totalServicosOs));
+    }
+  }, [servicosOsSelecionados, totalServicosOs]);
 
   const osAbertas = useMemo(
     () => ordens.filter((ordem) => ordem.status === 'aberta' || ordem.status === 'andamento'),
@@ -496,7 +542,8 @@ export default function Home() {
     const formData = new FormData(form);
     const nomeCatalogo = String(formData.get('nome_catalogo') || '');
     const novoNome = String(formData.get('novo_servico') || '').trim();
-    const nome = nomeCatalogo === '__novo__' ? novoNome : nomeCatalogo;
+    const nomeEditado = String(formData.get('nome') || '').trim();
+    const nome = servicoEditando ? nomeEditado : nomeCatalogo === '__novo__' ? novoNome : nomeCatalogo;
 
     setMsg('');
     setErro('');
@@ -508,9 +555,10 @@ export default function Home() {
       }
 
       const res = await fetch('/api/servicos', {
-        method: 'POST',
+        method: servicoEditando ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          id: servicoEditando?.id,
           nome,
           valor: formData.get('valor'),
           descricao: formData.get('descricao')
@@ -523,10 +571,13 @@ export default function Home() {
       }
 
       form.reset();
+      setServicoEditando(null);
+      setCriandoServico(false);
       setServicoSelecionado('');
+      setServicoNome('');
       setServicoValor('');
       setServicoDescricao('');
-      setMsg('Serviço salvo com sucesso.');
+      setMsg(servicoEditando ? 'Serviço atualizado com sucesso.' : 'Serviço salvo com sucesso.');
       await carregar();
     } catch (error) {
       setErro(error instanceof Error ? error.message : 'Erro inesperado ao salvar serviço.');
@@ -535,11 +586,71 @@ export default function Home() {
     }
   }
 
+  function editarServico(servico: Servico) {
+    setServicoEditando(servico);
+    setCriandoServico(false);
+    setServicoSelecionado('');
+    setServicoNome(servico.nome);
+    setServicoValor(String(servico.valor || ''));
+    setServicoDescricao(servico.descricao || '');
+    document.getElementById('servico-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  async function excluirServico(servico: Servico) {
+    if (!window.confirm(`Apagar o serviço "${servico.nome}"?`)) return;
+
+    setMsg('');
+    setErro('');
+    setSalvando(servico.id);
+
+    try {
+      const res = await fetch(`/api/servicos?id=${encodeURIComponent(servico.id)}`, {
+        method: 'DELETE'
+      });
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json.error || 'Erro ao apagar serviço.');
+      }
+
+      if (servicoEditando?.id === servico.id) {
+        cancelarEdicaoServico();
+      }
+      setServicosOsSelecionados((atuais) => atuais.filter((id) => id !== servico.id));
+      setMsg('Serviço apagado com sucesso.');
+      await carregar();
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Erro inesperado ao apagar serviço.');
+    } finally {
+      setSalvando('');
+    }
+  }
+
+  function cancelarEdicaoServico() {
+    setServicoEditando(null);
+    setCriandoServico(false);
+    setServicoSelecionado('');
+    setServicoNome('');
+    setServicoValor('');
+    setServicoDescricao('');
+  }
+
+  function novoServico() {
+    setServicoEditando(null);
+    setCriandoServico(true);
+    setServicoSelecionado('');
+    setServicoNome('');
+    setServicoValor('');
+    setServicoDescricao('');
+    document.getElementById('servico-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
   async function enviarOrdem(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
     const formData = new FormData(form);
     const body = Object.fromEntries(formData.entries());
+    const servicoIds = formData.getAll('servico_ids').map(String);
 
     setMsg('');
     setErro('');
@@ -549,7 +660,7 @@ export default function Home() {
       const res = await fetch('/api/ordens', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify({ ...body, servico_ids: servicoIds })
       });
       const json = await res.json();
 
@@ -559,6 +670,8 @@ export default function Home() {
 
       form.reset();
       setClienteSelecionado('');
+      setServicosOsSelecionados([]);
+      setValorEstimadoOs('');
       setUltimaOrdemId(json.id || '');
       setMsg('Ordem de serviço salva com sucesso.');
       await carregar();
@@ -832,7 +945,7 @@ export default function Home() {
   }
 
   return (
-    <main className="container">
+    <main className="container" data-active-tab={abaAtiva}>
       <header className="top">
         <div className="brandHero">
           <img className="brandLogo" src="/garage-logo.png" alt="Garage Auto Service" />
@@ -857,17 +970,20 @@ export default function Home() {
 
       {(msg || erro) && <div className={erro ? 'notice error' : 'notice'}>{erro || msg}</div>}
 
-      <nav className="quickNav" aria-label="Atalhos do painel">
-        {(pode('clientes') || pode('veiculos') || pode('mecanicos') || pode('servicos') || pode('fornecedores')) && (
-          <a href="#cadastros">Cadastros</a>
-        )}
-        {pode('ordens') && <a href="#nova-os">OS</a>}
-        {pode('pecas') && <a href="#estoque">Estoque</a>}
-        {pode('listas') && <a href="#listas">Listas</a>}
-        {isAdmin && <a href="#admin">Admin</a>}
+      <nav className="quickNav" aria-label="Módulos do painel">
+        {abas.map((aba) => (
+          <button
+            key={aba.key}
+            type="button"
+            className={abaAtiva === aba.key ? 'activeTab' : ''}
+            onClick={() => setAbaAtiva(aba.key)}
+          >
+            {aba.label}
+          </button>
+        ))}
       </nav>
 
-      <section className="metrics">
+      <section className="metrics tabMetrics">
         <Metric icon={<UserRound size={20} />} label="Clientes" value={clientes.length} />
         <Metric icon={<Car size={20} />} label="Veículos" value={veiculos.length} />
         <Metric icon={<ClipboardList size={20} />} label="OS ativas" value={osAbertas.length} />
@@ -877,7 +993,7 @@ export default function Home() {
       </section>
 
       <section className="workspace" id="cadastros">
-        {pode('clientes') && <div className="panel">
+        {pode('clientes') && <div className="panel tabPanel tab-cadastros">
           <div className="panelHeader">
             <h2>Novo cliente</h2>
             <UserRound size={18} />
@@ -891,7 +1007,7 @@ export default function Home() {
           </form>
         </div>}
 
-        {pode('veiculos') && <div className="panel">
+        {pode('veiculos') && <div className="panel tabPanel tab-cadastros">
           <div className="panelHeader">
             <h2>Novo veículo</h2>
             <Car size={18} />
@@ -952,7 +1068,7 @@ export default function Home() {
           </form>
         </div>}
 
-        {pode('mecanicos') && <div className="panel">
+        {pode('mecanicos') && <div className="panel tabPanel tab-cadastros">
           <div className="panelHeader">
             <h2>Novo mecânico</h2>
             <UserRound size={18} />
@@ -965,56 +1081,113 @@ export default function Home() {
           </form>
         </div>}
 
-        {pode('servicos') && <div className="panel">
+        {pode('servicos') && <div className="panel serviceManager tabPanel tab-cadastros" id="servico-form">
           <div className="panelHeader">
-            <h2>Novo serviço</h2>
-            <Wrench size={18} />
+            <h2>Gerenciar serviços</h2>
+            <button className="iconButton" type="button" onClick={novoServico} title="Novo serviço">
+              <Plus size={18} />
+            </button>
           </div>
-          <form onSubmit={enviarServico}>
-            <select
-              name="nome_catalogo"
-              value={servicoSelecionado}
-              onChange={(event) => {
-                const value = event.target.value;
-                const servico = servicosCatalogo.find((item) => item.nome === value);
-                setServicoSelecionado(value);
-                setServicoValor(servico && value !== '__novo__' ? String(servico.valor || '') : '');
-                setServicoDescricao(servico && value !== '__novo__' ? String(servico.descricao || '') : '');
-              }}
-              required
-            >
-              <option value="">Serviço</option>
-              {servicosCatalogo.map((servico) => (
-                <option key={servico.nome} value={servico.nome}>
-                  {servico.nome}
-                </option>
-              ))}
-              <option value="__novo__">Adicionar novo serviço</option>
-            </select>
-            {servicoSelecionado === '__novo__' && (
-              <input name="novo_servico" placeholder="Nome do novo serviço" required />
+
+          <div className="miniList serviceManagerList">
+            {servicos.length === 0 ? (
+              <EmptyState loading={carregando} text="Nenhum serviço cadastrado." />
+            ) : (
+              servicos.map((servico) => (
+                <div className="compactItem" key={servico.id}>
+                  <div>
+                    <strong>{servico.nome}</strong>
+                    <span>{money.format(Number(servico.valor || 0))}</span>
+                  </div>
+                  <div className="compactActions">
+                    <button className="ghostButton compactButton" type="button" onClick={() => editarServico(servico)}>
+                      <Edit3 size={15} />
+                      Editar
+                    </button>
+                    <button
+                      className="ghostButton dangerButton compactButton"
+                      type="button"
+                      onClick={() => excluirServico(servico)}
+                      disabled={salvando === servico.id}
+                    >
+                      {salvando === servico.id ? <Loader2 className="spin" size={15} /> : <Trash2 size={15} />}
+                      Apagar
+                    </button>
+                  </div>
+                </div>
+              ))
             )}
-            <input
-              name="valor"
-              placeholder="Valor"
-              type="number"
-              min="0"
-              step="0.01"
-              value={servicoValor}
-              onChange={(event) => setServicoValor(event.target.value)}
-              required
-            />
-            <textarea
-              name="descricao"
-              placeholder="Descrição"
-              value={servicoDescricao}
-              onChange={(event) => setServicoDescricao(event.target.value)}
-            />
-            <SubmitButton loading={salvando === 'Serviço'} label="Cadastrar serviço" />
-          </form>
+          </div>
+
+          {(criandoServico || servicoEditando) && (
+            <form className="serviceEditor" onSubmit={enviarServico}>
+              <div className="sectionTitle inlineSectionTitle">
+                <Wrench size={16} />
+                <h2>{servicoEditando ? 'Editar serviço' : 'Novo serviço'}</h2>
+              </div>
+              {servicoEditando ? (
+                <input
+                  name="nome"
+                  placeholder="Nome do serviço"
+                  value={servicoNome}
+                  onChange={(event) => setServicoNome(event.target.value)}
+                  required
+                />
+              ) : (
+                <>
+                  <select
+                    name="nome_catalogo"
+                    value={servicoSelecionado}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      const servico = servicosCatalogo.find((item) => item.nome === value);
+                      setServicoSelecionado(value);
+                      setServicoValor(servico && value !== '__novo__' ? String(servico.valor || '') : '');
+                      setServicoDescricao(servico && value !== '__novo__' ? String(servico.descricao || '') : '');
+                    }}
+                    required
+                  >
+                    <option value="">Serviço</option>
+                    {servicosCatalogo.map((servico) => (
+                      <option key={servico.nome} value={servico.nome}>
+                        {servico.nome}
+                      </option>
+                    ))}
+                    <option value="__novo__">Adicionar novo serviço</option>
+                  </select>
+                  {servicoSelecionado === '__novo__' && (
+                    <input name="novo_servico" placeholder="Nome do novo serviço" required />
+                  )}
+                </>
+              )}
+              <input
+                name="valor"
+                placeholder="Valor"
+                type="number"
+                min="0"
+                step="0.01"
+                value={servicoValor}
+                onChange={(event) => setServicoValor(event.target.value)}
+                required
+              />
+              <textarea
+                name="descricao"
+                placeholder="Descrição"
+                value={servicoDescricao}
+                onChange={(event) => setServicoDescricao(event.target.value)}
+              />
+              <div className="formActions">
+                <button className="ghostButton" type="button" onClick={cancelarEdicaoServico}>
+                  <X size={16} />
+                  Cancelar
+                </button>
+                <SubmitButton loading={salvando === 'Serviço'} label={servicoEditando ? 'Salvar serviço' : 'Cadastrar serviço'} />
+              </div>
+            </form>
+          )}
         </div>}
 
-        {pode('fornecedores') && <div className="panel">
+        {pode('fornecedores') && <div className="panel tabPanel tab-cadastros">
           <div className="panelHeader">
             <h2>Novo fornecedor</h2>
             <Truck size={18} />
@@ -1028,7 +1201,7 @@ export default function Home() {
           </form>
         </div>}
 
-        {pode('pecas') && <div className="panel">
+        {pode('pecas') && <div className="panel tabPanel tab-estoque">
           <div className="panelHeader">
             <h2>Nova peça</h2>
             <Package size={18} />
@@ -1058,7 +1231,7 @@ export default function Home() {
           </form>
         </div>}
 
-        {pode('ordens') && <div className="panel" id="nova-os">
+        {pode('ordens') && <div className="panel tabPanel tab-os" id="nova-os">
           <div className="panelHeader">
             <h2>Nova ordem de serviço</h2>
             <ClipboardList size={18} />
@@ -1096,8 +1269,45 @@ export default function Home() {
                 ))}
             </select>
             <textarea name="descricao_problema" placeholder="Problema relatado" required />
+            <div className="servicePicker">
+              <span>Serviços da OS</span>
+              {servicos.length === 0 ? (
+                <p className="empty">Cadastre serviços para selecionar aqui.</p>
+              ) : (
+                <div className="serviceOptions">
+                  {servicos.map((servico) => (
+                    <label key={servico.id}>
+                      <input
+                        name="servico_ids"
+                        type="checkbox"
+                        value={servico.id}
+                        checked={servicosOsSelecionados.includes(servico.id)}
+                        onChange={(event) => {
+                          setServicosOsSelecionados((atuais) =>
+                            event.target.checked
+                              ? [...atuais, servico.id]
+                              : atuais.filter((id) => id !== servico.id)
+                          );
+                        }}
+                      />
+                      <span>{servico.nome}</span>
+                      <strong>{money.format(Number(servico.valor || 0))}</strong>
+                    </label>
+                  ))}
+                </div>
+              )}
+              <strong className="serviceTotal">Total dos serviços: {money.format(totalServicosOs)}</strong>
+            </div>
             <div className="row">
-              <input name="valor_estimado" placeholder="Valor estimado" type="number" min="0" step="0.01" />
+              <input
+                name="valor_estimado"
+                placeholder="Valor estimado"
+                type="number"
+                min="0"
+                step="0.01"
+                value={valorEstimadoOs}
+                onChange={(event) => setValorEstimadoOs(event.target.value)}
+              />
               <input name="data_entrada" type="date" />
             </div>
             <select name="status" defaultValue="aberta">
@@ -1119,7 +1329,7 @@ export default function Home() {
           )}
         </div>}
 
-        {pode('orcamentos') && <div className="panel">
+        {pode('orcamentos') && <div className="panel tabPanel tab-orcamentos">
           <div className="panelHeader">
             <h2>Novo orçamento</h2>
             <FileText size={18} />
@@ -1156,7 +1366,7 @@ export default function Home() {
           </form>
         </div>}
 
-        {pode('fotos') && <div className="panel">
+        {pode('fotos') && <div className="panel tabPanel tab-os">
           <div className="panelHeader">
             <h2>Foto antes/depois</h2>
             <Camera size={18} />
@@ -1190,7 +1400,7 @@ export default function Home() {
           </form>
         </div>}
 
-        {isAdmin && <div className="adminSection" id="admin">
+        {isAdmin && <div className="adminSection tabPanel tab-admin" id="admin">
           <div className="sectionTitle">
             <Settings size={18} />
             <h2>Administração</h2>
@@ -1284,7 +1494,7 @@ export default function Home() {
       </section>
 
       {pode('listas') && <section className="lists" id="listas">
-        <div className="panel listPanel">
+        <div className="panel listPanel tabPanel tab-os tab-listas">
           <div className="panelHeader">
             <h2>Ordens recentes</h2>
             <ClipboardList size={18} />
@@ -1311,6 +1521,11 @@ export default function Home() {
                       {ordem.veiculos?.marca} {ordem.veiculos?.modelo}
                     </strong>
                     <p>{ordem.descricao_problema}</p>
+                    {ordem.ordem_servicos_itens && ordem.ordem_servicos_itens.length > 0 && (
+                      <p className="serviceLine">
+                        {ordem.ordem_servicos_itens.map((servico) => servico.nome).join(', ')}
+                      </p>
+                    )}
                     <span className="muted">
                       {ordem.clientes?.nome} | Entrada {formatDate(ordem.data_entrada)} |{' '}
                       {money.format(Number(ordem.valor_estimado || 0))}
@@ -1346,42 +1561,24 @@ export default function Home() {
           )}
         </div>
 
-        <div className="panel listPanel">
+        <div className="panel listPanel tabPanel tab-cadastros tab-listas">
           <div className="panelHeader">
-            <h2>Clientes e serviços</h2>
+            <h2>Clientes</h2>
             <Phone size={18} />
           </div>
-          <div className="splitList">
-            <div>
-              <h3>Clientes</h3>
-              {clientes.length === 0 ? (
-                <EmptyState loading={carregando} text="Nenhum cliente cadastrado." />
-              ) : (
-                clientes.slice(0, 6).map((cliente) => (
-                  <div className="compactItem" key={cliente.id}>
-                    <strong>{cliente.nome}</strong>
-                    <span>{cliente.telefone}</span>
-                  </div>
-                ))
-              )}
-            </div>
-            <div>
-              <h3>Serviços</h3>
-              {servicos.length === 0 ? (
-                <EmptyState loading={carregando} text="Nenhum serviço cadastrado." />
-              ) : (
-                servicos.map((servico) => (
-                  <div className="compactItem" key={servico.id}>
-                    <strong>{servico.nome}</strong>
-                    <span>{money.format(Number(servico.valor || 0))}</span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+          {clientes.length === 0 ? (
+            <EmptyState loading={carregando} text="Nenhum cliente cadastrado." />
+          ) : (
+            clientes.slice(0, 8).map((cliente) => (
+              <div className="compactItem" key={cliente.id}>
+                <strong>{cliente.nome}</strong>
+                <span>{cliente.telefone}</span>
+              </div>
+            ))
+          )}
         </div>
 
-        <div className="panel listPanel">
+        <div className="panel listPanel tabPanel tab-orcamentos tab-listas">
           <div className="panelHeader">
             <h2>Orçamentos recentes</h2>
             <FileText size={18} />
@@ -1409,7 +1606,7 @@ export default function Home() {
           )}
         </div>
 
-        <div className="panel listPanel" id="estoque">
+        <div className="panel listPanel tabPanel tab-estoque tab-listas" id="estoque">
           <div className="panelHeader">
             <h2>Estoque de peças</h2>
             <Package size={18} />
@@ -1445,7 +1642,7 @@ export default function Home() {
           )}
         </div>
 
-        <div className="panel listPanel">
+        <div className="panel listPanel tabPanel tab-cadastros tab-listas">
           <div className="panelHeader">
             <h2>Equipe e fornecedores</h2>
             <Truck size={18} />
@@ -1480,7 +1677,7 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="panel listPanel">
+        <div className="panel listPanel tabPanel tab-os tab-listas">
           <div className="panelHeader">
             <h2>Fotos antes/depois</h2>
             <Camera size={18} />

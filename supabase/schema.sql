@@ -99,6 +99,16 @@ create table if not exists ordens_servico (
   created_at timestamptz not null default now()
 );
 
+create table if not exists ordem_servicos_itens (
+  id uuid primary key default uuid_generate_v4(),
+  ordem_id uuid not null references ordens_servico(id) on delete cascade,
+  servico_id uuid references servicos(id) on delete set null,
+  nome text not null,
+  valor numeric(10,2) not null default 0,
+  quantidade int not null default 1,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists fotos_os (
   id uuid primary key default uuid_generate_v4(),
   ordem_id uuid not null references ordens_servico(id) on delete cascade,
@@ -139,6 +149,7 @@ create index if not exists idx_modelos_veiculos_marca on modelos_veiculos(marca_
 create index if not exists idx_ordens_cliente on ordens_servico(cliente_id);
 create index if not exists idx_ordens_veiculo on ordens_servico(veiculo_id);
 create index if not exists idx_ordens_mecanico on ordens_servico(mecanico_id);
+create index if not exists idx_ordem_servicos_itens_ordem on ordem_servicos_itens(ordem_id);
 create index if not exists idx_ordens_status on ordens_servico(status);
 create index if not exists idx_pecas_fornecedor on pecas(fornecedor_id);
 create index if not exists idx_orcamentos_cliente on orcamentos(cliente_id);

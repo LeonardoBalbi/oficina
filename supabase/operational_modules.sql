@@ -61,6 +61,16 @@ create table if not exists public.orcamentos (
 alter table public.ordens_servico
   add column if not exists mecanico_id uuid references public.mecanicos(id) on delete set null;
 
+create table if not exists public.ordem_servicos_itens (
+  id uuid primary key default uuid_generate_v4(),
+  ordem_id uuid not null references public.ordens_servico(id) on delete cascade,
+  servico_id uuid references public.servicos(id) on delete set null,
+  nome text not null,
+  valor numeric(10,2) not null default 0,
+  quantidade int not null default 1,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.fotos_os (
   id uuid primary key default uuid_generate_v4(),
   ordem_id uuid not null references public.ordens_servico(id) on delete cascade,
@@ -131,6 +141,7 @@ where nullif(trim(v.modelo), '') is not null
 on conflict (marca_id, nome) do nothing;
 
 create index if not exists idx_ordens_mecanico on public.ordens_servico(mecanico_id);
+create index if not exists idx_ordem_servicos_itens_ordem on public.ordem_servicos_itens(ordem_id);
 create index if not exists idx_modelos_veiculos_marca on public.modelos_veiculos(marca_id);
 create index if not exists idx_pecas_fornecedor on public.pecas(fornecedor_id);
 create index if not exists idx_orcamentos_cliente on public.orcamentos(cliente_id);

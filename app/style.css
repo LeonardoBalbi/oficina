@@ -451,6 +451,54 @@ option {
   font-weight: 800;
 }
 
+.servicePicker {
+  display: grid;
+  gap: 9px;
+  margin-bottom: 10px;
+}
+
+.servicePicker > span,
+.serviceTotal {
+  color: var(--brand);
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.serviceOptions {
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.serviceOptions label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(216, 221, 229, 0.16);
+  border-radius: 6px;
+}
+
+.serviceOptions input {
+  width: auto;
+  min-height: auto;
+  margin: 0;
+}
+
+.serviceOptions span {
+  overflow-wrap: anywhere;
+}
+
+.serviceOptions strong {
+  color: var(--metal);
+  font-size: 12px;
+}
+
 .permissionGrid label {
   display: flex;
   align-items: center;
@@ -463,6 +511,24 @@ option {
 
 .miniList {
   margin-top: 12px;
+}
+
+.serviceManagerList {
+  margin-top: 0;
+}
+
+.serviceEditor {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.inlineSectionTitle {
+  margin-bottom: 10px;
+}
+
+.inlineSectionTitle h2 {
+  font-size: 14px;
 }
 
 .exportGrid {
@@ -506,6 +572,13 @@ option {
 
 .compactButton {
   min-width: 98px;
+}
+
+.compactActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .inlineActions,
@@ -649,6 +722,12 @@ option {
 .item p {
   margin: 6px 0;
   color: #d2d7df;
+}
+
+.serviceLine {
+  color: var(--brand);
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .muted,
@@ -925,7 +1004,7 @@ option {
     top: 0;
     z-index: 10;
     display: grid;
-    grid-template-columns: repeat(4, max-content);
+    grid-template-columns: repeat(7, max-content);
     gap: 7px;
     margin: 0 -7px 10px;
     padding: 7px;
@@ -941,7 +1020,7 @@ option {
     display: none;
   }
 
-  .quickNav a {
+  .quickNav button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -956,6 +1035,30 @@ option {
     text-decoration: none;
     text-transform: uppercase;
     white-space: nowrap;
+  }
+
+  .quickNav button.activeTab {
+    color: #111;
+    background: linear-gradient(135deg, #ffd766, var(--brand));
+    border-color: rgba(255, 190, 11, 0.85);
+    box-shadow: 0 8px 18px rgba(255, 190, 11, 0.16);
+  }
+
+  .container[data-active-tab] .tabPanel,
+  .container:not([data-active-tab="dashboard"]) .tabMetrics {
+    display: none;
+  }
+
+  .container[data-active-tab="cadastros"] .tab-cadastros,
+  .container[data-active-tab="os"] .tab-os,
+  .container[data-active-tab="orcamentos"] .tab-orcamentos,
+  .container[data-active-tab="estoque"] .tab-estoque,
+  .container[data-active-tab="listas"] .tab-listas {
+    display: block;
+  }
+
+  .container[data-active-tab="admin"] .tab-admin {
+    display: grid;
   }
 
   .metrics {

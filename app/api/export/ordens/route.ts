@@ -13,9 +13,10 @@ type OrdemExport = {
   clientes?: { nome?: string; telefone?: string; email?: string; endereco?: string } | null;
   veiculos?: { placa?: string; marca?: string; modelo?: string; ano?: number; cor?: string } | null;
   mecanicos?: { nome?: string } | null;
+  ordem_servicos_itens?: Array<{ nome?: string; valor?: number; quantidade?: number }> | null;
 };
 
-const headers = ['Número', 'Cliente', 'Telefone', 'Veículo', 'Mecânico', 'Status', 'Entrada', 'Saída', 'Valor', 'Problema'];
+const headers = ['Numero', 'Cliente', 'Telefone', 'Veiculo', 'Mecanico', 'Status', 'Entrada', 'Saida', 'Valor', 'Problema'];
 
 export async function GET(req: Request) {
   try {
@@ -25,12 +26,25 @@ export async function GET(req: Request) {
     const supabaseAdmin = getSupabaseAdmin();
     let query = supabaseAdmin
       .from('ordens_servico')
-      .select('*, clientes(nome, telefone, email, endereco), veiculos(placa, marca, modelo, ano, cor), mecanicos(nome)')
+      .select('*, clientes(nome, telefone, email, endereco), veiculos(placa, marca, modelo, ano, cor), mecanicos(nome), ordem_servicos_itens(nome, valor, quantidade)')
       .order('created_at', { ascending: false });
 
     if (id) query = query.eq('id', id);
 
-    const { data, error } = await query;
+    let { data, error } = await query;
+
+    if (error) {
+      let fallbackQuery = supabaseAdmin
+        .from('ordens_servico')
+        .select('*, clientes(nome, telefone, email, endereco), veiculos(placa, marca, modelo, ano, cor), mecanicos(nome)')
+        .order('created_at', { ascending: false });
+
+      if (id) fallbackQuery = fallbackQuery.eq('id', id);
+
+      const fallback = await fallbackQuery;
+      data = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -49,11 +63,11 @@ export async function GET(req: Request) {
         money(ordem.valor_estimado),
         ordem.descricao_problema
       ]);
-      return fileResponse(excelDocument('Ordens de Serviço', table(headers, rows)), 'ordens-servico.xls', 'application/vnd.ms-excel; charset=utf-8');
+      return fileResponse(excelDocument('Ordens de Servico', table(headers, rows)), 'ordens-servico.xls', 'application/vnd.ms-excel; charset=utf-8');
     }
 
     if (id && !ordens[0]) {
-      return NextResponse.json({ error: 'Ordem de serviço não encontrada.' }, { status: 404 });
+      return NextResponse.json({ error: 'Ordem de servico nao encontrada.' }, { status: 404 });
     }
 
     const company = await fetchCompanyConfig(supabaseAdmin);
@@ -73,6 +87,15 @@ export async function GET(req: Request) {
 }
 
 function buildPdf(ordem: OrdemExport, title: string, company: Awaited<ReturnType<typeof fetchCompanyConfig>>) {
+  const servicos = ordem.ordem_servicos_itens || [];
+  const servicosRows =
+    servicos.length > 0
+      ? servicos.map((servico) => [
+          servico.nome || '-',
+          `${Number(servico.quantidade || 1)}x | ${money(Number(servico.valor || 0) * Number(servico.quantidade || 1))}`
+        ] as [string, unknown])
+      : [['Descricao', ordem.descricao_problema] as [string, unknown]];
+
   return {
     title,
     number: shortId(ordem.id),
@@ -84,38 +107,39 @@ function buildPdf(ordem: OrdemExport, title: string, company: Awaited<ReturnType
           ['Nome', ordem.clientes?.nome],
           ['Telefone', ordem.clientes?.telefone],
           ['E-mail', ordem.clientes?.email],
-          ['Endereço', ordem.clientes?.endereco]
+          ['Endereco', ordem.clientes?.endereco]
         ] as Array<[string, unknown]>
       },
       {
-        title: 'Dados do veículo',
+        title: 'Dados do veiculo',
         rows: [
-          ['Veículo', vehicleLabel(ordem)],
+          ['Veiculo', vehicleLabel(ordem)],
           ['Placa', ordem.veiculos?.placa],
           ['Ano', ordem.veiculos?.ano],
           ['Cor', ordem.veiculos?.cor]
         ] as Array<[string, unknown]>
       },
       {
-        title: 'Serviços executados',
+        title: 'Servicos da OS',
         rows: [
-          ['Descrição', ordem.descricao_problema],
-          ['Responsável', ordem.mecanicos?.nome],
+          ...servicosRows,
+          ['Problema relatado', ordem.descricao_problema],
+          ['Responsavel', ordem.mecanicos?.nome],
           ['Status', ordem.status],
           ['Entrada', date(ordem.data_entrada)],
-          ['Saída', date(ordem.data_saida)]
+          ['Saida', date(ordem.data_saida)]
         ] as Array<[string, unknown]>
       },
       {
-        title: 'Peças utilizadas',
-        rows: [['Peças', 'Não informado nesta OS']] as Array<[string, unknown]>
+        title: 'Pecas utilizadas',
+        rows: [['Pecas', 'Nao informado nesta OS']] as Array<[string, unknown]>
       },
       {
-        title: 'Valores e observações',
+        title: 'Valores e observacoes',
         rows: [
-          ['Serviços', money(ordem.valor_estimado)],
-          ['Peças', money(0)],
-          ['Observações', ordem.observacoes || '-']
+          ['Servicos', money(ordem.valor_estimado)],
+          ['Pecas', money(0)],
+          ['Observacoes', ordem.observacoes || '-']
         ] as Array<[string, unknown]>
       }
     ],
@@ -125,7 +149,7 @@ function buildPdf(ordem: OrdemExport, title: string, company: Awaited<ReturnType
 }
 
 function companyTitle(id: string | null) {
-  return id ? 'Ordem de Serviço' : 'Ordens de Serviço';
+  return id ? 'Ordem de Servico' : 'Ordens de Servico';
 }
 
 function emptyOrder(): OrdemExport {
