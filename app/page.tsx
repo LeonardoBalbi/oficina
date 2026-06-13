@@ -89,6 +89,7 @@ type Ordem = {
   descricao_problema: string;
   valor_estimado: number;
   data_entrada: string;
+  data_saida?: string | null;
   clientes?: { nome: string; telefone: string };
   veiculos?: { placa: string; marca: string; modelo: string };
   mecanicos?: { nome: string } | null;
@@ -341,6 +342,10 @@ export default function Home() {
   useEffect(() => {
     const session = window.localStorage.getItem('oficina_user');
 
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+    }
+
     if (session) {
       const user = JSON.parse(session) as AppUser;
       setUsuarioLogado(user);
@@ -427,6 +432,24 @@ export default function Home() {
         .reduce((total, ordem) => total + Number(ordem.valor_estimado || 0), 0),
     [ordens]
   );
+
+  const servicosRealizadosMes = useMemo(() => {
+    const agora = new Date();
+    const mesAtual = agora.getMonth();
+    const anoAtual = agora.getFullYear();
+
+    return ordens
+      .filter((ordem) => {
+        if (ordem.status !== 'finalizada') return false;
+        const dataReferencia = new Date(String(ordem.data_saida || ordem.data_entrada));
+        return dataReferencia.getMonth() === mesAtual && dataReferencia.getFullYear() === anoAtual;
+      })
+      .reduce((total, ordem) => {
+        const itens = ordem.ordem_servicos_itens || [];
+        if (itens.length === 0) return total + 1;
+        return total + itens.reduce((subtotal, item) => subtotal + Number(item.quantidade || 1), 0);
+      }, 0);
+  }, [ordens]);
 
   const estoqueBaixo = useMemo(
     () => pecas.filter((peca) => Number(peca.quantidade || 0) <= Number(peca.estoque_minimo || 0)),
@@ -990,6 +1013,7 @@ export default function Home() {
         <Metric icon={<FileText size={20} />} label="Orçamentos" value={orcamentosAbertos.length} />
         <Metric icon={<AlertTriangle size={20} />} label="Estoque baixo" value={estoqueBaixo.length} />
         <Metric icon={<Wrench size={20} />} label="Previsto" value={money.format(faturamentoPrevisto)} />
+        {isAdmin && <Metric icon={<Wrench size={20} />} label="Serviços no mês" value={servicosRealizadosMes} />}
       </section>
 
       <section className="workspace" id="cadastros">

@@ -1,0 +1,25 @@
+{
+  "name": "Garage Auto Service",
+  "short_name": "Garage Auto",
+  "description": "Sistema de gestão para oficina mecânica.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#101317",
+  "theme_color": "#101317",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/garage-logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/garage-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
