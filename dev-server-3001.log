@@ -1,0 +1,10 @@
+
+> oficina-vercel-supabase@1.0.0 dev
+> next dev --hostname 127.0.0.1 --port 3001
+
+▲ Next.js 16.2.9 (Turbopack)
+- Local:         http://127.0.0.1:3001
+- Network:       http://127.0.0.1:3001
+- Environments: .env.local, .env
+✓ Ready in 1341ms
+[?25h

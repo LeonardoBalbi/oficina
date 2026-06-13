@@ -2,7 +2,7 @@ import './style.css';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Oficina Mecânica',
+  title: 'Garage Auto Service',
   description: 'Sistema para oficina mecânica com Next.js, Vercel e Supabase'
 };
 

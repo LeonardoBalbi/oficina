@@ -33,6 +33,7 @@ export async function POST(req: Request) {
       .insert({
         cliente_id: body.cliente_id,
         veiculo_id: body.veiculo_id,
+        mecanico_id: body.mecanico_id || null,
         descricao_problema: String(body.descricao_problema).trim(),
         status,
         valor_estimado: Number(body.valor_estimado || 0),
