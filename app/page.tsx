@@ -14,6 +14,7 @@ import {
   Phone,
   Plus,
   RefreshCw,
+  Search,
   Settings,
   Trash2,
   Truck,
@@ -183,12 +184,14 @@ export default function Home() {
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
   const [fotos, setFotos] = useState<FotoOS[]>([]);
   const [clienteSelecionado, setClienteSelecionado] = useState('');
+  const [buscaOrdens, setBuscaOrdens] = useState('');
   const [msg, setMsg] = useState('');
   const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState('');
   const [usuarioEditando, setUsuarioEditando] = useState<AppUser | null>(null);
   const [ultimaOrdemId, setUltimaOrdemId] = useState('');
+  const [acaoOrdemId, setAcaoOrdemId] = useState('');
 
   async function carregar(userOverride?: AppUser | null) {
     setCarregando(true);
@@ -312,6 +315,36 @@ export default function Home() {
     [orcamentos]
   );
 
+  const ordensFiltradas = useMemo(() => {
+    const termo = normalizeSearch(buscaOrdens);
+
+    if (!termo) return ordens;
+
+    return ordens.filter((ordem) => {
+      const veiculo = ordem.veiculos;
+      const dataEntrada = formatDate(ordem.data_entrada);
+      const campos = [
+        ordem.id,
+        ordem.id.slice(0, 8),
+        ordem.clientes?.nome,
+        ordem.clientes?.telefone,
+        dataEntrada,
+        ordem.data_entrada,
+        dataEntrada.replace(/\//g, ''),
+        veiculo?.placa,
+        veiculo?.placa?.replace(/-/g, ''),
+        veiculo?.marca,
+        veiculo?.modelo,
+        `${veiculo?.marca || ''} ${veiculo?.modelo || ''}`,
+        ordem.descricao_problema,
+        ordem.mecanicos?.nome,
+        statusLabel[ordem.status]
+      ];
+
+      return normalizeSearch(campos.join(' ')).includes(termo);
+    });
+  }, [buscaOrdens, ordens]);
+
   async function enviar(e: FormEvent<HTMLFormElement>, url: string, label: string) {
     e.preventDefault();
     const form = e.currentTarget;
@@ -373,6 +406,7 @@ export default function Home() {
       setUltimaOrdemId(json.id || '');
       setMsg('Ordem de serviço salva com sucesso.');
       await carregar();
+      setAcaoOrdemId(json.id || '');
     } catch (error) {
       setErro(error instanceof Error ? error.message : 'Erro inesperado ao salvar OS.');
     } finally {
@@ -396,20 +430,19 @@ export default function Home() {
     const telefone = String(ordem.clientes?.telefone || '').replace(/\D/g, '');
     if (!telefone) {
       setErro('Cliente sem telefone para envio pelo WhatsApp.');
-      return;
+      return false;
     }
     const phone = telefone.startsWith('55') ? telefone : `55${telefone}`;
     const pdfUrl = `${window.location.origin}${osPdfUrl(ordem.id)}`;
-    const excelUrl = `${window.location.origin}${osExcelUrl(ordem.id)}`;
     const texto = [
       `Olá, ${ordem.clientes?.nome || ''}.`,
-      `Segue a Ordem de Serviço ${ordem.id.slice(0, 8).toUpperCase()}.`,
+      `Segue a Ordem de Serviço ${ordem.id.slice(0, 8).toUpperCase()} em PDF.`,
       `Veículo: ${ordem.veiculos?.placa || ''} ${ordem.veiculos?.marca || ''} ${ordem.veiculos?.modelo || ''}`.trim(),
-      `PDF: ${pdfUrl}`,
-      `Excel: ${excelUrl}`
+      `PDF: ${pdfUrl}`
     ].join('\n');
 
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(texto)}`, '_blank', 'noopener,noreferrer');
+    return true;
   }
 
   async function login(e: FormEvent<HTMLFormElement>) {
@@ -610,12 +643,15 @@ export default function Home() {
       setMsg('Ordem atualizada.');
       if (status === 'finalizada') setUltimaOrdemId(id);
       await carregar();
+      if (status === 'finalizada') setAcaoOrdemId(id);
     } catch (error) {
       setErro(error instanceof Error ? error.message : 'Erro inesperado ao atualizar.');
     } finally {
       setSalvando('');
     }
   }
+
+  const ordemAcao = acaoOrdemId ? ordemPorId(acaoOrdemId) : null;
 
   if (!usuarioLogado) {
     return (
@@ -1027,15 +1063,26 @@ export default function Home() {
             <h2>Ordens recentes</h2>
             <ClipboardList size={18} />
           </div>
+          <label className="searchField">
+            <Search size={17} />
+            <input
+              value={buscaOrdens}
+              onChange={(event) => setBuscaOrdens(event.target.value)}
+              placeholder="Pesquisar por cliente, data, número da OS, placa ou carro"
+            />
+          </label>
           {ordens.length === 0 ? (
             <EmptyState loading={carregando} text="Nenhuma ordem de serviço cadastrada." />
+          ) : ordensFiltradas.length === 0 ? (
+            <EmptyState loading={false} text="Nenhuma ordem encontrada para essa pesquisa." />
           ) : (
             <div className="list">
-              {ordens.map((ordem) => (
+              {ordensFiltradas.map((ordem) => (
                 <article className="item" key={ordem.id}>
                   <div>
                     <strong>
-                      {ordem.veiculos?.placa} - {ordem.veiculos?.marca} {ordem.veiculos?.modelo}
+                      OS {ordem.id.slice(0, 8).toUpperCase()} | {ordem.veiculos?.placa} -{' '}
+                      {ordem.veiculos?.marca} {ordem.veiculos?.modelo}
                     </strong>
                     <p>{ordem.descricao_problema}</p>
                     <span className="muted">
@@ -1227,6 +1274,21 @@ export default function Home() {
           )}
         </div>
       </section>}
+
+      {ordemAcao && (
+        <OsDecisionModal
+          ordem={ordemAcao}
+          loading={salvando}
+          onClose={() => setAcaoOrdemId('')}
+          onDownload={async (ordem) => {
+            await baixarArquivo(osPdfUrl(ordem.id), `os-${ordem.id.slice(0, 8).toUpperCase()}.pdf`, 'OS PDF');
+            setAcaoOrdemId('');
+          }}
+          onWhatsApp={(ordem) => {
+            if (enviarOsWhatsApp(ordem)) setAcaoOrdemId('');
+          }}
+        />
+      )}
     </main>
   );
 }
@@ -1264,6 +1326,50 @@ function OsActions({
   );
 }
 
+function OsDecisionModal({
+  ordem,
+  loading,
+  onClose,
+  onDownload,
+  onWhatsApp
+}: {
+  ordem: Ordem;
+  loading: string;
+  onClose: () => void;
+  onDownload: (ordem: Ordem) => void | Promise<void>;
+  onWhatsApp: (ordem: Ordem) => void;
+}) {
+  return (
+    <div className="modalOverlay" role="presentation">
+      <section className="modalPanel" role="dialog" aria-modal="true" aria-labelledby="os-modal-title">
+        <div className="modalHeader">
+          <div>
+            <span className="eyebrow">Ordem de serviço</span>
+            <h2 id="os-modal-title">OS {ordem.id.slice(0, 8).toUpperCase()}</h2>
+          </div>
+          <button className="iconButton" type="button" onClick={onClose} title="Fechar">
+            <X size={18} />
+          </button>
+        </div>
+        <p className="modalSummary">
+          {ordem.clientes?.nome || 'Cliente'} | {ordem.veiculos?.placa || 'Sem placa'} -{' '}
+          {ordem.veiculos?.marca || ''} {ordem.veiculos?.modelo || ''}
+        </p>
+        <div className="modalActions">
+          <button type="button" onClick={() => onDownload(ordem)} disabled={loading === 'OS PDF'}>
+            {loading === 'OS PDF' ? <Loader2 className="spin" size={16} /> : <Download size={16} />}
+            Baixar PDF da OS
+          </button>
+          <button type="button" className="whatsappPrimaryButton" onClick={() => onWhatsApp(ordem)}>
+            <MessageCircle size={16} />
+            Enviar PDF no WhatsApp
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function Metric({ icon, label, value }: { icon: React.ReactNode; label: string | number; value: string | number }) {
   return (
     <div className="metric">
@@ -1290,6 +1396,14 @@ function EmptyState({ loading, text }: { loading: boolean; text: string }) {
 function formatDate(value: string) {
   if (!value) return '-';
   return new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(new Date(value));
+}
+
+function normalizeSearch(value: string) {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
 }
 
 

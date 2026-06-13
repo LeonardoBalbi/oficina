@@ -534,13 +534,99 @@ option {
   background: rgba(66, 211, 131, 0.12);
 }
 
+.whatsappPrimaryButton {
+  color: #06170e;
+  background: linear-gradient(135deg, #8af0b5, #42d383);
+  box-shadow: 0 10px 22px rgba(66, 211, 131, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.38);
+}
+
 .dangerButton {
   border-color: rgba(255, 91, 85, 0.58);
   background: rgba(255, 91, 85, 0.14);
 }
 
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.modalPanel {
+  width: min(440px, 100%);
+  padding: 18px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.095), rgba(255, 255, 255, 0.04)), var(--panel-strong);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.modalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.modalHeader h2 {
+  margin: 0;
+  color: var(--metal);
+  font-size: 28px;
+  line-height: 1;
+}
+
+.modalHeader .eyebrow {
+  margin-bottom: 8px;
+}
+
+.modalHeader .iconButton {
+  position: static;
+}
+
+.modalSummary {
+  margin: 0 0 16px;
+  color: #d2d7df;
+  overflow-wrap: anywhere;
+}
+
+.modalActions {
+  display: grid;
+  gap: 10px;
+}
+
 .listPanel {
   min-height: 320px;
+}
+
+.searchField {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 12px;
+  padding: 0 12px;
+  color: var(--brand);
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(216, 221, 229, 0.18);
+  border-radius: 6px;
+}
+
+.searchField input {
+  min-height: 42px;
+  margin: 0;
+  padding-right: 0;
+  padding-left: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.searchField input:focus {
+  box-shadow: none;
 }
 
 .list {

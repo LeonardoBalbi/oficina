@@ -8,7 +8,7 @@ export async function GET() {
     const supabaseAdmin = getSupabaseAdmin();
     const { data, error } = await supabaseAdmin
       .from('ordens_servico')
-      .select('*, clientes(nome, telefone), veiculos(placa, marca, modelo)')
+      .select('*, clientes(nome, telefone), veiculos(placa, marca, modelo), mecanicos(nome)')
       .order('created_at', { ascending: false });
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
